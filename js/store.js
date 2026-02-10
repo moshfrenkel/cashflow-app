@@ -1,0 +1,362 @@
+// ===== Data Store - localStorage + Supabase cloud sync =====
+const Store = {
+    KEY: 'cashflow_data',
+    _syncStatus: 'idle',
+    _syncTimeout: null,
+
+    defaultData() {
+        return {
+            home: {
+                balance: 0,
+                incomes: [],
+                fixedExpenses: [],
+                variableExpenses: []
+            },
+            business: {
+                balance: 0,
+                incomes: [],
+                fixedExpenses: [],
+                variableExpenses: [],
+                transfers: []
+            },
+            creditCards: [],
+            employees: [],
+            savingGoals: [],
+            categories: {
+                home: ['קבועות', 'בית', 'ילדים', 'רפואה', 'ביטוחים', 'רכב ותחבורה', 'תקשורת', 'בילויים', 'שונות'],
+                business: ['קבועות', 'שכר', 'שיווק', 'ציוד', 'תחבורה', 'שונות']
+            },
+            settings: { theme: 'dark', currency: '₪' }
+        };
+    },
+
+    load() {
+        try {
+            const raw = localStorage.getItem(this.KEY);
+            if (raw) {
+                const data = JSON.parse(raw);
+                // Merge with defaults to ensure all keys exist
+                const def = this.defaultData();
+                return this._deepMerge(def, data);
+            }
+        } catch (e) {
+            console.error('Error loading data:', e);
+        }
+        return this.defaultData();
+    },
+
+    save(data) {
+        try {
+            localStorage.setItem(this.KEY, JSON.stringify(data));
+        } catch (e) {
+            console.error('Error saving data:', e);
+        }
+        // Sync to Supabase (debounced, async, fire-and-forget)
+        this.saveToSupabase();
+    },
+
+    get() {
+        if (!this._cache) this._cache = this.load();
+        return this._cache;
+    },
+
+    update(fn) {
+        const data = this.get();
+        fn(data);
+        this.save(data);
+        this._cache = data;
+        // Trigger re-render of current page
+        if (typeof App !== 'undefined' && App.currentPage) {
+            App.renderPage(App.currentPage);
+        }
+    },
+
+    _deepMerge(target, source) {
+        const result = { ...target };
+        for (const key of Object.keys(source)) {
+            if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+                result[key] = this._deepMerge(target[key] || {}, source[key]);
+            } else {
+                result[key] = source[key];
+            }
+        }
+        return result;
+    },
+
+    genId() {
+        return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+    },
+
+    exportJSON() {
+        const data = this.get();
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `cashflow_backup_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('הנתונים יוצאו בהצלחה', 'success');
+    },
+
+    importJSON(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                this.save(data);
+                this._cache = null;
+                showToast('הנתונים יובאו בהצלחה', 'success');
+                if (typeof App !== 'undefined') App.renderPage(App.currentPage);
+            } catch (err) {
+                showToast('שגיאה בקריאת הקובץ', 'error');
+            }
+        };
+        reader.readAsText(file);
+    },
+
+    clearAll() {
+        localStorage.removeItem(this.KEY);
+        this._cache = null;
+        // Also reset Supabase data
+        if (typeof Auth !== 'undefined' && Auth.currentUser) {
+            supabase
+                .from('user_data')
+                .update({ data: this.defaultData() })
+                .eq('user_id', Auth.currentUser.id)
+                .then(() => {});
+        }
+        showToast('כל הנתונים נמחקו', 'info');
+        if (typeof App !== 'undefined') App.renderPage(App.currentPage);
+    },
+
+    // ===== Supabase Sync Methods =====
+
+    async loadFromSupabase() {
+        if (!supabase || !Auth.currentUser) return;
+
+        try {
+            const { data, error } = await supabase
+                .from('user_data')
+                .select('id, data, updated_at')
+                .eq('user_id', Auth.currentUser.id)
+                .maybeSingle();
+
+            if (error) {
+                console.error('Supabase load error:', error);
+                showToast('שגיאה בטעינה מהענן, עובדים עם נתונים מקומיים', 'error');
+                return;
+            }
+
+            if (data) {
+                // Returning user - load from Supabase
+                const merged = this._deepMerge(this.defaultData(), data.data);
+                localStorage.setItem(this.KEY, JSON.stringify(merged));
+                this._cache = merged;
+                console.log('Data loaded from Supabase');
+            } else {
+                // First login - check localStorage for existing data to migrate
+                const localData = this.load();
+                const hasLocalData = localData.home.incomes.length > 0 ||
+                    localData.home.fixedExpenses.length > 0 ||
+                    localData.business.incomes.length > 0 ||
+                    localData.creditCards.length > 0 ||
+                    localData.employees.length > 0;
+
+                const dataToSave = hasLocalData ? localData : this.defaultData();
+
+                const { data: inserted, error: insertError } = await supabase
+                    .from('user_data')
+                    .insert({ user_id: Auth.currentUser.id, data: dataToSave })
+                    .select('id')
+                    .single();
+
+                if (insertError) {
+                    console.error('Supabase insert error:', insertError);
+                } else {
+                    console.log('Initial data saved to Supabase');
+                    if (hasLocalData) {
+                        showToast('הנתונים המקומיים הועלו לענן!', 'success');
+                    }
+                }
+                this._cache = dataToSave;
+                localStorage.setItem(this.KEY, JSON.stringify(dataToSave));
+            }
+        } catch (err) {
+            console.error('loadFromSupabase error:', err);
+        }
+    },
+
+    saveToSupabase() {
+        if (!supabase || typeof Auth === 'undefined' || !Auth.currentUser) return;
+
+        clearTimeout(this._syncTimeout);
+        this._syncTimeout = setTimeout(async () => {
+            this._syncStatus = 'syncing';
+            this.updateSyncIndicator();
+
+            try {
+                const { error } = await supabase
+                    .from('user_data')
+                    .update({ data: this._cache })
+                    .eq('user_id', Auth.currentUser.id);
+
+                if (error) {
+                    this._syncStatus = 'error';
+                    console.error('Sync error:', error);
+                } else {
+                    this._syncStatus = 'saved';
+                }
+            } catch (err) {
+                this._syncStatus = 'error';
+                console.error('Sync exception:', err);
+            }
+
+            this.updateSyncIndicator();
+            setTimeout(() => {
+                this._syncStatus = 'idle';
+                this.updateSyncIndicator();
+            }, 2000);
+        }, 500);
+    },
+
+    updateSyncIndicator() {
+        const el = document.getElementById('sync-status');
+        if (!el) return;
+        const states = {
+            idle:    { text: '', icon: '' },
+            syncing: { text: 'מסנכרן...', icon: '🔄' },
+            saved:   { text: 'נשמר בענן', icon: '☁️' },
+            error:   { text: 'שגיאת סנכרון', icon: '⚠️' }
+        };
+        const state = states[this._syncStatus] || states.idle;
+        el.textContent = state.icon + ' ' + state.text;
+        el.className = 'sync-indicator sync-' + this._syncStatus;
+    },
+
+    loadDemoData() {
+        const today = new Date();
+        const m = today.getMonth();
+        const y = today.getFullYear();
+        const d = (day) => `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        const prevM = (day) => `${y}-${String(m).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+
+        const data = this.defaultData();
+
+        // Home incomes
+        data.home.balance = 5200;
+        data.home.incomes = [
+            { id: this.genId(), name: 'משכורת מיכל', amount: 8500, type: 'monthly', date: d(1), category: 'משכורת' },
+            { id: this.genId(), name: 'משכורת מוש', amount: 12000, type: 'monthly', date: d(1), category: 'משכורת' },
+            { id: this.genId(), name: 'קצבת ילדים', amount: 269, type: 'monthly', date: d(3), category: 'קצבאות' }
+        ];
+
+        // Home fixed expenses
+        data.home.fixedExpenses = [
+            { id: this.genId(), name: 'שכר דירה', amount: 6400, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true },
+            { id: this.genId(), name: 'ועד בית', amount: 250, category: 'קבועות', frequency: 'monthly', chargeDate: 5, active: true },
+            { id: this.genId(), name: 'הלוואה ריבית', amount: 937, category: 'קבועות', frequency: 'monthly', chargeDate: 20, active: true },
+            { id: this.genId(), name: 'הלוואה קרן', amount: 873, category: 'קבועות', frequency: 'monthly', chargeDate: 20, active: true },
+            { id: this.genId(), name: 'גן גל', amount: 3900, category: 'ילדים', frequency: 'monthly', chargeDate: 1, active: true },
+            { id: this.genId(), name: 'ביטוח בריאות משלים', amount: 361, category: 'ביטוחים', frequency: 'monthly', chargeDate: 1, active: true },
+            { id: this.genId(), name: 'ביטוח חיים', amount: 116, category: 'ביטוחים', frequency: 'monthly', chargeDate: 1, active: true },
+            { id: this.genId(), name: 'סלקום אינטרנט', amount: 104, category: 'תקשורת', frequency: 'monthly', chargeDate: 15, active: true },
+            { id: this.genId(), name: 'סלקום סלולר', amount: 105, category: 'תקשורת', frequency: 'monthly', chargeDate: 15, active: true },
+            { id: this.genId(), name: 'נטפליקס', amount: 55, category: 'תקשורת', frequency: 'monthly', chargeDate: 15, active: true },
+            { id: this.genId(), name: 'קאנטרי גבעתיים', amount: 524, category: 'רפואה', frequency: 'monthly', chargeDate: 1, active: true },
+            { id: this.genId(), name: 'פנסיון רודי', amount: 1400, category: 'שונות', frequency: 'monthly', chargeDate: 1, active: true }
+        ];
+
+        // Home variable expenses
+        data.home.variableExpenses = [
+            { id: this.genId(), name: 'שופרסל', amount: 450, category: 'בית', date: d(3) },
+            { id: this.genId(), name: 'סופר יודה', amount: 180, category: 'בית', date: d(7) },
+            { id: this.genId(), name: 'דלק פז', amount: 260, category: 'רכב ותחבורה', date: d(5) },
+            { id: this.genId(), name: 'אוכל בחוץ', amount: 150, category: 'בילויים', date: d(10) },
+            { id: this.genId(), name: 'מספרה', amount: 70, category: 'רפואה', date: d(12) },
+            { id: this.genId(), name: 'שופרסל', amount: 380, category: 'בית', date: prevM(15) },
+            { id: this.genId(), name: 'דלק', amount: 230, category: 'רכב ותחבורה', date: prevM(20) }
+        ];
+
+        // Business
+        data.business.balance = -44000;
+        data.business.incomes = [
+            { id: this.genId(), clientName: 'בית עמנואל', amount: 36600, expectedDate: d(5), status: 'received', notes: '' },
+            { id: this.genId(), clientName: 'דיגיטף', amount: 6195, expectedDate: d(15), status: 'received', notes: '' },
+            { id: this.genId(), clientName: 'הייטק', amount: 1500, expectedDate: d(10), status: 'received', notes: '' },
+            { id: this.genId(), clientName: 'מוסדות', amount: 4500, expectedDate: `${y}-${String(m+2).padStart(2,'0')}-01`, status: 'expected', notes: 'אחרי הורדת 12%' },
+            { id: this.genId(), clientName: 'דיגיטף', amount: 5800, expectedDate: `${y}-${String(m+2).padStart(2,'0')}-15`, status: 'expected', notes: '' }
+        ];
+
+        data.business.fixedExpenses = [
+            { id: this.genId(), name: 'ביטוח לאומי', amount: 376, category: 'קבועות', frequency: 'monthly', chargeDate: 15, active: true },
+            { id: this.genId(), name: 'הלוואה ב.לאומי 21', amount: 554, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true },
+            { id: this.genId(), name: 'הלוואה ב.לאומי 22', amount: 656, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true },
+            { id: this.genId(), name: 'ביטוח מקצועי כלל', amount: 70, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true },
+            { id: this.genId(), name: 'ביטוח מקצועי פניקס', amount: 110, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true },
+            { id: this.genId(), name: 'בריין בינה', amount: 37, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true },
+            { id: this.genId(), name: 'הלוואה', amount: 4122, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true },
+            { id: this.genId(), name: 'החזר גישור', amount: 22098, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true }
+        ];
+
+        data.business.variableExpenses = [
+            { id: this.genId(), name: 'ספוטיפיי וג׳יפיטי', amount: 105, category: 'קבועות', date: d(1) },
+            { id: this.genId(), name: 'קנבה', amount: 40, category: 'שיווק', date: d(1) },
+            { id: this.genId(), name: 'גוגל', amount: 8, category: 'שיווק', date: d(1) }
+        ];
+
+        data.business.transfers = [
+            { id: this.genId(), amount: 6400, date: d(1), notes: 'שכ"ד' },
+            { id: this.genId(), amount: 3000, date: d(5), notes: 'ביט בית' }
+        ];
+
+        // Credit Cards
+        data.creditCards = [
+            {
+                id: this.genId(), name: 'ישרכרט מיכל', account: 'home', limit: 5000, billingDate: 15,
+                charges: [
+                    { id: this.genId(), description: 'רופא וטרינר', totalAmount: 570, installments: 10, installmentsPaid: 4, startDate: prevM(15), monthlyAmount: 57 },
+                    { id: this.genId(), description: 'חשמל', totalAmount: 491, installments: 1, installmentsPaid: 0, startDate: d(15), monthlyAmount: 491 },
+                    { id: this.genId(), description: 'BIT העברה', totalAmount: 700, installments: 1, installmentsPaid: 0, startDate: d(15), monthlyAmount: 700 }
+                ]
+            },
+            {
+                id: this.genId(), name: 'ויזה חדש', account: 'home', limit: 15000, billingDate: 23,
+                charges: [
+                    { id: this.genId(), description: 'קופת חולים', totalAmount: 1470, installments: 10, installmentsPaid: 3, startDate: prevM(23), monthlyAmount: 147 },
+                    { id: this.genId(), description: 'קאנטרי', totalAmount: 524, installments: 1, installmentsPaid: 0, startDate: d(23), monthlyAmount: 524 },
+                    { id: this.genId(), description: 'ביטוחים', totalAmount: 723, installments: 1, installmentsPaid: 0, startDate: d(23), monthlyAmount: 723 }
+                ]
+            },
+            {
+                id: this.genId(), name: 'ישרכרט עסק', account: 'business', limit: 29700, billingDate: 20,
+                charges: [
+                    { id: this.genId(), description: 'ביטוח לאומי', totalAmount: 376, installments: 1, installmentsPaid: 0, startDate: d(20), monthlyAmount: 376 },
+                    { id: this.genId(), description: 'אביץ', totalAmount: 3600, installments: 12, installmentsPaid: 2, startDate: prevM(20), monthlyAmount: 300 },
+                    { id: this.genId(), description: 'אייבורי', totalAmount: 2988, installments: 12, installmentsPaid: 1, startDate: d(20), monthlyAmount: 249 }
+                ]
+            }
+        ];
+
+        // Employees
+        data.employees = [
+            { id: this.genId(), name: 'לירז', role: 'עובד/ת', grossSalary: 160, paymentDate: 9, active: true, payments: [] },
+            { id: this.genId(), name: 'ימית', role: 'עובד/ת', grossSalary: 2520, paymentDate: 9, active: true, payments: [] },
+            { id: this.genId(), name: 'עודד', role: 'עובד/ת', grossSalary: 2340, paymentDate: 9, active: true, payments: [] },
+            { id: this.genId(), name: 'נדיה', role: 'עובד/ת', grossSalary: 3000, paymentDate: 9, active: true, payments: [] },
+            { id: this.genId(), name: 'ליאור', role: 'עובד/ת', grossSalary: 3000, paymentDate: 10, active: true, payments: [] },
+            { id: this.genId(), name: 'רומי', role: 'עובד/ת', grossSalary: 2040, paymentDate: 9, active: true, payments: [] }
+        ];
+
+        // Saving Goals
+        data.savingGoals = [
+            { id: this.genId(), name: 'קרן חירום', targetAmount: 30000, currentAmount: 5000, deadline: `${y+1}-01-01` },
+            { id: this.genId(), name: 'חופשה משפחתית', targetAmount: 15000, currentAmount: 3200, deadline: `${y}-08-01` }
+        ];
+
+        this.save(data);
+        this._cache = data;
+        showToast('נתוני דוגמה נטענו בהצלחה!', 'success');
+        if (typeof App !== 'undefined') App.renderPage(App.currentPage || 'dashboard');
+    }
+};

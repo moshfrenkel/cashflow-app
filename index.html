@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ניהול תזרים מזומנים</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <!-- Sidebar -->
+    <nav id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+            <div class="logo">₪</div>
+            <h2>תזרים</h2>
+            <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
+        </div>
+        <ul class="nav-list">
+            <li class="nav-item active" data-page="dashboard">
+                <span class="nav-icon">📊</span><span class="nav-text">דשבורד</span>
+            </li>
+            <li class="nav-item" data-page="home-cashflow">
+                <span class="nav-icon">🏠</span><span class="nav-text">תזרים בית</span>
+            </li>
+            <li class="nav-item" data-page="business-cashflow">
+                <span class="nav-icon">💼</span><span class="nav-text">תזרים עסק</span>
+            </li>
+            <li class="nav-item" data-page="credit-cards">
+                <span class="nav-icon">💳</span><span class="nav-text">כרטיסי אשראי</span>
+            </li>
+            <li class="nav-item" data-page="salaries">
+                <span class="nav-icon">👥</span><span class="nav-text">משכורות</span>
+            </li>
+            <li class="nav-item" data-page="forecast">
+                <span class="nav-icon">📈</span><span class="nav-text">תחזית ותכנון</span>
+            </li>
+            <li class="nav-item" data-page="reports">
+                <span class="nav-icon">📋</span><span class="nav-text">דוחות</span>
+            </li>
+            <li class="nav-item" data-page="settings">
+                <span class="nav-icon">⚙️</span><span class="nav-text">הגדרות</span>
+            </li>
+        </ul>
+        <div class="sidebar-footer">
+            <button class="btn-demo" onclick="Store.loadDemoData()">📥 טען נתוני דוגמה</button>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main id="main-content" class="main-content">
+        <header class="top-bar">
+            <button class="hamburger" onclick="toggleSidebar()">☰</button>
+            <h1 id="page-title">דשבורד</h1>
+            <div class="top-bar-actions">
+                <span id="sync-status" class="sync-indicator"></span>
+                <span id="current-date"></span>
+            </div>
+        </header>
+        <div id="page-container" class="page-container">
+            <!-- Pages loaded dynamically -->
+        </div>
+    </main>
+
+    <!-- Modal Overlay -->
+    <div id="modal-overlay" class="modal-overlay" onclick="closeModal()">
+        <div class="modal" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="modal-title"></h3>
+                <button class="modal-close" onclick="closeModal()">✕</button>
+            </div>
+            <div id="modal-body" class="modal-body"></div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast-container" class="toast-container"></div>
+
+    <!-- Scripts -->
+    <script src="js/store.js"></script>
+    <script src="js/supabase-client.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/dashboard.js"></script>
+    <script src="js/home-cashflow.js"></script>
+    <script src="js/business-cashflow.js"></script>
+    <script src="js/credit-cards.js"></script>
+    <script src="js/salaries.js"></script>
+    <script src="js/forecast.js"></script>
+    <script src="js/reports.js"></script>
+    <script src="js/settings.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

@@ -120,7 +120,7 @@ const Store = {
         this._cache = null;
         // Also reset Supabase data
         if (typeof Auth !== 'undefined' && Auth.currentUser) {
-            supabase
+            supabaseClient
                 .from('user_data')
                 .update({ data: this.defaultData() })
                 .eq('user_id', Auth.currentUser.id)
@@ -133,10 +133,10 @@ const Store = {
     // ===== Supabase Sync Methods =====
 
     async loadFromSupabase() {
-        if (!supabase || !Auth.currentUser) return;
+        if (!supabaseClient || !Auth.currentUser) return;
 
         try {
-            const { data, error } = await supabase
+            const { data, error } = await supabaseClient
                 .from('user_data')
                 .select('id, data, updated_at')
                 .eq('user_id', Auth.currentUser.id)
@@ -165,7 +165,7 @@ const Store = {
 
                 const dataToSave = hasLocalData ? localData : this.defaultData();
 
-                const { data: inserted, error: insertError } = await supabase
+                const { data: inserted, error: insertError } = await supabaseClient
                     .from('user_data')
                     .insert({ user_id: Auth.currentUser.id, data: dataToSave })
                     .select('id')
@@ -188,7 +188,7 @@ const Store = {
     },
 
     saveToSupabase() {
-        if (!supabase || typeof Auth === 'undefined' || !Auth.currentUser) return;
+        if (!supabaseClient || typeof Auth === 'undefined' || !Auth.currentUser) return;
 
         clearTimeout(this._syncTimeout);
         this._syncTimeout = setTimeout(async () => {
@@ -196,7 +196,7 @@ const Store = {
             this.updateSyncIndicator();
 
             try {
-                const { error } = await supabase
+                const { error } = await supabaseClient
                     .from('user_data')
                     .update({ data: this._cache })
                     .eq('user_id', Auth.currentUser.id);

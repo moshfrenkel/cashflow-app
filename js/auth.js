@@ -3,14 +3,14 @@ const Auth = {
     currentUser: null,
 
     async init() {
-        if (!supabase) {
+        if (!supabaseClient) {
             console.warn('Supabase not available - offline mode');
             App.showApp();
             return;
         }
 
         // Listen for auth state changes (handles magic link callback)
-        supabase.auth.onAuthStateChange((event, session) => {
+        supabaseClient.auth.onAuthStateChange((event, session) => {
             if (event === 'SIGNED_IN' && session && !Auth.currentUser) {
                 Auth.currentUser = session.user;
                 Auth.onLoginSuccess();
@@ -18,7 +18,7 @@ const Auth = {
         });
 
         try {
-            const { data: { session } } = await supabase.auth.getSession();
+            const { data: { session } } = await supabaseClient.auth.getSession();
             if (session && session.user) {
                 Auth.currentUser = session.user;
                 await Auth.onLoginSuccess();
@@ -126,7 +126,7 @@ const Auth = {
 
         Auth.setLoading(true);
         try {
-            const { error } = await supabase.auth.signInWithOtp({
+            const { error } = await supabaseClient.auth.signInWithOtp({
                 email: email,
                 options: {
                     emailRedirectTo: window.location.origin + window.location.pathname
@@ -162,8 +162,8 @@ const Auth = {
     },
 
     async logout() {
-        if (supabase) {
-            try { await supabase.auth.signOut(); } catch(e) {}
+        if (supabaseClient) {
+            try { await supabaseClient.auth.signOut(); } catch(e) {}
         }
         Auth.currentUser = null;
         Store._cache = null;

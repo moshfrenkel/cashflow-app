@@ -19,7 +19,10 @@
             <button class="sidebar-close" onclick="toggleSidebar()">✕</button>
         </div>
         <ul class="nav-list">
-            <li class="nav-item active" data-page="dashboard">
+            <li class="nav-item active" data-page="daily-view">
+                <span class="nav-icon">📅</span><span class="nav-text">תצוגה יומית</span>
+            </li>
+            <li class="nav-item" data-page="dashboard">
                 <span class="nav-icon">📊</span><span class="nav-text">דשבורד</span>
             </li>
             <li class="nav-item" data-page="home-cashflow">
@@ -56,7 +59,7 @@
     <main id="main-content" class="main-content">
         <header class="top-bar">
             <button class="hamburger" onclick="toggleSidebar()">☰</button>
-            <h1 id="page-title">דשבורד</h1>
+            <h1 id="page-title">תצוגה יומית</h1>
             <div class="top-bar-actions">
                 <span id="sync-status" class="sync-indicator"></span>
                 <span id="current-date"></span>
@@ -94,6 +97,7 @@
     <script src="js/forecast.js"></script>
     <script src="js/reports.js"></script>
     <script src="js/settings.js"></script>
+    <script src="js/daily-view.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

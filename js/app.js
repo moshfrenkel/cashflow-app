@@ -1,8 +1,9 @@
 // ===== Main Application =====
 const App = {
-    currentPage: 'dashboard',
+    currentPage: 'daily-view',
 
     pages: {
+        'daily-view': { title: 'תצוגה יומית', module: () => DailyView },
         'dashboard': { title: 'דשבורד', module: () => Dashboard },
         'home-cashflow': { title: 'תזרים בית', module: () => HomeCashflow },
         'business-cashflow': { title: 'תזרים עסק', module: () => BusinessCashflow },

@@ -50,7 +50,10 @@ function closeModal() {
 }
 
 function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    sidebar.classList.toggle('open');
+    if (overlay) overlay.classList.toggle('show', sidebar.classList.contains('open'));
 }
 
 function confirmAction(msg) {

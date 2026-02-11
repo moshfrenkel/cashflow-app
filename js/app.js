@@ -27,10 +27,12 @@ const App = {
             });
         });
 
-        // Close sidebar on mobile when clicking outside
+        // Close sidebar on mobile when clicking main content
         document.getElementById('main-content').addEventListener('click', () => {
             if (window.innerWidth <= 768) {
                 document.getElementById('sidebar').classList.remove('open');
+                const overlay = document.getElementById('sidebar-overlay');
+                if (overlay) overlay.classList.remove('show');
             }
         });
 
@@ -64,6 +66,8 @@ const App = {
         // Close sidebar on mobile
         if (window.innerWidth <= 768) {
             document.getElementById('sidebar').classList.remove('open');
+            const overlay = document.getElementById('sidebar-overlay');
+            if (overlay) overlay.classList.remove('show');
         }
 
         this.renderPage(page);

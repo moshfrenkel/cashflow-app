@@ -66,6 +66,7 @@ const Settings = {
                             </label>
                         </div>
                         <hr style="border-color:var(--border-color);">
+                        <button class="btn btn-ghost" style="color:var(--yellow);" onclick="Settings.resetKeepFixed()">🔄 איפוס (שמירת הוצאות קבועות)</button>
                         <button class="btn btn-danger" onclick="Settings.clearAllData()">🗑️ מחיקת כל הנתונים</button>
                     </div>
                 </div>
@@ -131,6 +132,11 @@ const Settings = {
         Store.update(data => {
             data.categories[account].splice(index, 1);
         });
+    },
+
+    resetKeepFixed() {
+        if (!confirmAction('לאפס את כל הנתונים? הוצאות קבועות, קטגוריות והגדרות יישמרו.')) return;
+        Store.resetKeepFixed();
     },
 
     clearAllData() {

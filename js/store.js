@@ -131,6 +131,22 @@ const Store = {
         if (typeof App !== 'undefined') App.renderPage(App.currentPage);
     },
 
+    resetKeepFixed() {
+        const current = this.get();
+        const fresh = this.defaultData();
+        // Keep fixed expenses from both accounts
+        fresh.home.fixedExpenses = current.home.fixedExpenses || [];
+        fresh.business.fixedExpenses = current.business.fixedExpenses || [];
+        // Keep categories and settings
+        fresh.categories = current.categories || fresh.categories;
+        fresh.settings = current.settings || fresh.settings;
+
+        this.save(fresh);
+        this._cache = fresh;
+        showToast('הנתונים אופסו - הוצאות קבועות נשמרו!', 'success');
+        if (typeof App !== 'undefined') App.renderPage(App.currentPage);
+    },
+
     // ===== Supabase Sync Methods =====
 
     async loadFromSupabase() {

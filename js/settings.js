@@ -66,6 +66,7 @@ const Settings = {
                             </label>
                         </div>
                         <hr style="border-color:var(--border-color);">
+                        <button class="btn btn-primary" style="background:var(--green);" onclick="Settings.loadRealData()">📊 טען נתונים אמיתיים (פברואר 2026)</button>
                         <button class="btn btn-ghost" style="color:var(--yellow);" onclick="Settings.resetKeepFixed()">🔄 איפוס (שמירת הוצאות קבועות)</button>
                         <button class="btn btn-danger" onclick="Settings.clearAllData()">🗑️ מחיקת כל הנתונים</button>
                     </div>
@@ -143,6 +144,13 @@ const Settings = {
         if (!confirmAction('האם אתה בטוח? כל הנתונים יימחקו!')) return;
         if (!confirmAction('בטוח בטוח? אין דרך חזרה!')) return;
         Store.clearAll();
+    },
+
+    loadRealData() {
+        if (!confirmAction('לטעון נתונים אמיתיים (פברואר 2026)? זה יחליף את כל הנתונים הקיימים!')) return;
+        Store.loadRealData();
+        showToast('נתונים אמיתיים נטענו בהצלחה! 🎉', 'success');
+        App.navigate('daily-view');
     },
 
     afterRender() {}

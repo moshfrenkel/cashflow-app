@@ -375,5 +375,165 @@ const Store = {
         this._cache = data;
         showToast('נתוני דוגמה נטענו בהצלחה!', 'success');
         if (typeof App !== 'undefined') App.renderPage(App.currentPage || 'dashboard');
+    },
+
+    // ===== Real Data - loaded from bank files Feb 2026 =====
+    loadRealData() {
+        const data = this.defaultData();
+
+        // ========== HOME ACCOUNT - Beinleumi 135-24120 ==========
+        data.home.balance = 9152.91; // PDF "התחייבויות ונכסים" 11.2.2026
+
+        // --- Home Incomes ---
+        data.home.incomes = [
+            { id: this.genId(), name: 'משכורת מיכל - ביכמן תמר', amount: 9000, type: 'monthly', date: '2026-02-10', category: 'משכורת' },
+            { id: this.genId(), name: 'משכורת מיכל - בית עמנואל', amount: 1200, type: 'monthly', date: '2026-02-10', category: 'משכורת' },
+            { id: this.genId(), name: 'קצבת ילדים', amount: 276, type: 'monthly', date: '2026-02-17', category: 'קצבאות' },
+            { id: this.genId(), name: 'שיק מאבא - אחרון 15K', amount: 15000, type: 'one-time', date: '2026-02-23', category: 'שונות' },
+            { id: this.genId(), name: 'שיק מאבא - 5K אחרון', amount: 5000, type: 'one-time', date: '2026-03-23', category: 'שונות' }
+        ];
+
+        // --- Home Fixed Expenses (via bank, not credit card) ---
+        data.home.fixedExpenses = [
+            { id: this.genId(), name: 'שכר דירה', amount: 6400, category: 'קבועות', frequency: 'monthly', chargeDate: 10, active: true, paymentMethod: 'check', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'ועד בית', amount: 250, category: 'קבועות', frequency: 'monthly', chargeDate: 10, active: true, paymentMethod: 'check', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'הלוואה 302 בינלאומי', amount: 1777.16, category: 'קבועות', frequency: 'monthly', chargeDate: 17, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 120, paymentsMade: 22 },
+            { id: this.genId(), name: 'הלוואה 493 בינלאומי', amount: 1014.09, category: 'קבועות', frequency: 'monthly', chargeDate: 21, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 60, paymentsMade: 3 },
+            { id: this.genId(), name: 'עמלת פעולות בנק', amount: 23, category: 'שונות', frequency: 'monthly', chargeDate: 30, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 0, paymentsMade: 0 }
+        ];
+
+        // --- Home Variable Expenses (recent credit card + misc) ---
+        data.home.variableExpenses = [];
+
+        // ========== BUSINESS ACCOUNT - Hapoalim 407-234551 ==========
+        data.business.balance = -35426.63; // ריכוז יתרות 10.2.2026
+
+        // --- Business Incomes ---
+        data.business.incomes = [
+            { id: this.genId(), clientName: 'מוסדות חינוך', amount: 31422, expectedDate: '2026-02-28', status: 'received', notes: 'תשלום חד-פעמי/שנתי' },
+            { id: this.genId(), clientName: 'בית עמנואל', amount: 1987, expectedDate: '2026-02-15', status: 'received', notes: 'חודשי' },
+            { id: this.genId(), clientName: 'וונדר מור', amount: 1606, expectedDate: '2026-02-05', status: 'received', notes: 'משכורת חודשית' },
+            { id: this.genId(), clientName: 'סדנת AI - שלומוביץ', amount: 1180, expectedDate: '2026-02-10', status: 'received', notes: '' },
+            { id: this.genId(), clientName: 'עיריית ת"א (דיגיטף)', amount: 1770, expectedDate: '2026-02-08', status: 'received', notes: 'סכום משתנה' }
+        ];
+
+        // --- Business Fixed Expenses (via bank) ---
+        data.business.fixedExpenses = [
+            { id: this.genId(), name: 'הלוואה הפועלים', amount: 4029.18, category: 'קבועות', frequency: 'monthly', chargeDate: 8, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 84, paymentsMade: 6 },
+            { id: this.genId(), name: 'רו"ח קובי הוכמן', amount: 590, category: 'קבועות', frequency: 'monthly', chargeDate: 7, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'עמלת מסלול פועלים', amount: 22, category: 'שונות', frequency: 'monthly', chargeDate: 1, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            // Credit card standing orders (הו"ק)
+            { id: this.genId(), name: 'ביטוח לאומי', amount: 554, category: 'קבועות', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'הפניקס ביטוח', amount: 111, category: 'ביטוחים', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'כלל רכב/דירה/עסק', amount: 70.24, category: 'ביטוחים', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'איילון ביטוח כללי', amount: 133, category: 'ביטוחים', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'פנגו', amount: 32, category: 'רכב ותחבורה', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'Microsoft 365', amount: 43, category: 'ציוד', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'Google One', amount: 74.90, category: 'ציוד', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'Canva AI', amount: 39.90, category: 'שיווק', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'Zoom', amount: 54.92, category: 'ציוד', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'Claude AI', amount: 63.51, category: 'ציוד', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'Suno AI', amount: 31.81, category: 'ציוד', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'בריין בינה', amount: 37, category: 'ציוד', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'הי ביז (poalim wonder)', amount: 15, category: 'ציוד', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'מטה קריצ\'ר - יועץ', amount: 1180, category: 'שיווק', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 }
+        ];
+
+        // --- Business Variable Expenses ---
+        data.business.variableExpenses = [];
+
+        // --- Business Transfers (business → home) ---
+        data.business.transfers = [
+            { id: this.genId(), amount: 6400, date: '2026-02-10', notes: 'שכ"ד' },
+            { id: this.genId(), amount: 2000, date: '2026-02-10', notes: 'העברה לבית' }
+        ];
+
+        // ========== CREDIT CARDS ==========
+        data.creditCards = [
+            {
+                id: this.genId(), name: 'ישרכרט 1899', account: 'home', limit: 5000, billingDate: 15,
+                charges: [
+                    // All one-time charges for current billing cycle (6,286.75 total)
+                    // No installment charges on this card
+                ]
+            },
+            {
+                id: this.genId(), name: 'ויזה כ.א.ל 8908', account: 'home', limit: 15000, billingDate: 23,
+                charges: [
+                    // Installment charges
+                    { id: this.genId(), description: 'קאנטרי גבעתיים', totalAmount: 4680, installments: 12, installmentsPaid: 2, startDate: '2025-12-23', monthlyAmount: 390 },
+                    { id: this.genId(), description: 'ביטוח חובה', totalAmount: 2044, installments: 12, installmentsPaid: 4, startDate: '2025-10-23', monthlyAmount: 170.33 },
+                    { id: this.genId(), description: 'צחי טיבולי רופא שיניים', totalAmount: 690, installments: 12, installmentsPaid: 2, startDate: '2025-12-23', monthlyAmount: 57 },
+                    { id: this.genId(), description: 'המרכז החדש', totalAmount: 500, installments: 10, installmentsPaid: 6, startDate: '2025-08-23', monthlyAmount: 50 },
+                    { id: this.genId(), description: 'צהרון בית עמנואל', totalAmount: 1154, installments: 1, installmentsPaid: 0, startDate: '2026-02-23', monthlyAmount: 1154 }
+                ]
+            },
+            {
+                id: this.genId(), name: 'מסטרקארד 3867 עסק', account: 'business', limit: 29700, billingDate: 20,
+                charges: [
+                    // Installment charges
+                    { id: this.genId(), description: 'פרינטר דיל', totalAmount: 1630, installments: 3, installmentsPaid: 1, startDate: '2025-12-20', monthlyAmount: 543.33 },
+                    { id: this.genId(), description: 'באג גבעתיים', totalAmount: 2499, installments: 12, installmentsPaid: 3, startDate: '2025-09-20', monthlyAmount: 208 },
+                    { id: this.genId(), description: 'אייבורי', totalAmount: 2489, installments: 10, installmentsPaid: 4, startDate: '2025-06-20', monthlyAmount: 248.90 },
+                    { id: this.genId(), description: 'פריסת כרטיס אשראי', totalAmount: 17414.66, installments: 3, installmentsPaid: 1, startDate: '2025-12-20', monthlyAmount: 5901.42 },
+                    // Tax payments (bi-monthly, entered as charges)
+                    { id: this.genId(), description: 'מע"מ', totalAmount: 10043, installments: 1, installmentsPaid: 0, startDate: '2026-02-20', monthlyAmount: 10043 },
+                    { id: this.genId(), description: 'מס הכנסה', totalAmount: 2562, installments: 1, installmentsPaid: 0, startDate: '2026-02-20', monthlyAmount: 2562 }
+                ]
+            }
+        ];
+
+        // ========== LOANS ==========
+        data.loans = [
+            {
+                id: this.genId(), name: 'הלוואה 302 בינלאומי', account: 'home', lender: 'בנק הבינלאומי',
+                originalAmount: 152550, monthlyPayment: 1777.16, interestRate: 7,
+                totalInstallments: 120, installmentsPaid: 22, chargeDate: 17,
+                startDate: '2024-02-19', endDate: '2034-03-17', notes: 'P+1.5%, הל.קהלי מטרה', active: true
+            },
+            {
+                id: this.genId(), name: 'הלוואה 493 בינלאומי', account: 'home', lender: 'בנק הבינלאומי',
+                originalAmount: 50000, monthlyPayment: 1014.09, interestRate: 8,
+                totalInstallments: 60, installmentsPaid: 3, chargeDate: 21,
+                startDate: '2025-11-21', endDate: '2030-10-21', notes: 'P+2.5%, הל.קהלי מטרה', active: true
+            },
+            {
+                id: this.genId(), name: 'הלוואה הפועלים (ישנה)', account: 'business', lender: 'בנק הפועלים',
+                originalAmount: 250000, monthlyPayment: 4029.18, interestRate: 8.1,
+                totalInstallments: 84, installmentsPaid: 6, chargeDate: 8,
+                startDate: '2024-07-23', endDate: '2031-07-08', notes: 'P+2.1%', active: true
+            },
+            {
+                id: this.genId(), name: 'הלוואה הפועלים (חדשה)', account: 'business', lender: 'בנק הפועלים',
+                originalAmount: 40800, monthlyPayment: 670, interestRate: 8.5,
+                totalInstallments: 80, installmentsPaid: 0, chargeDate: 20,
+                startDate: '2026-03-20', endDate: '2032-10-20', notes: '8.5% קבועה, מתחיל 20.3.26', active: true
+            }
+        ];
+
+        // ========== EMPLOYEES (Freelancers) ==========
+        data.employees = [
+            { id: this.genId(), name: 'ליאור סיני', role: 'פרילנסר/ית', grossSalary: 1700, paymentDate: 10, active: true, payments: [] },
+            { id: this.genId(), name: 'חן צור', role: 'פרילנסר/ית', grossSalary: 1020, paymentDate: 10, active: true, payments: [] },
+            { id: this.genId(), name: 'ימית ואופיר לוינגר', role: 'פרילנסר/ית', grossSalary: 3480, paymentDate: 10, active: true, payments: [] },
+            { id: this.genId(), name: 'רומי לני', role: 'פרילנסר/ית', grossSalary: 960, paymentDate: 10, active: true, payments: [] },
+            { id: this.genId(), name: 'בן יוסף עודד', role: 'פרילנסר/ית', grossSalary: 2320, paymentDate: 10, active: true, payments: [] },
+            { id: this.genId(), name: 'נדזידה מקרוב', role: 'פרילנסר/ית', grossSalary: 6440, paymentDate: 10, active: true, payments: [] }
+        ];
+
+        // ========== SETTINGS ==========
+        data.settings.creditFramework = { home: 10000, business: 45000 };
+
+        // ========== CATEGORIES ==========
+        data.categories = {
+            home: ['קבועות', 'בית', 'ילדים', 'רפואה', 'ביטוחים', 'רכב ותחבורה', 'תקשורת', 'בילויים', 'שונות'],
+            business: ['קבועות', 'ביטוחים', 'שכר', 'שיווק', 'ציוד', 'רכב ותחבורה', 'שונות']
+        };
+
+        // Save and refresh
+        this.save(data);
+        this._cache = data;
+        showToast('נתונים אמיתיים נטענו בהצלחה!', 'success');
+        if (typeof App !== 'undefined') App.renderPage(App.currentPage || 'dashboard');
     }
 };

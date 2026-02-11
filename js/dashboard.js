@@ -1,48 +1,73 @@
 // ===== Dashboard Module =====
 const Dashboard = {
     charts: {},
+    activeAccount: 'home', // 'home' or 'business'
 
     render() {
         const data = Store.get();
+        const isHome = this.activeAccount === 'home';
+
+        // Home calculations
         const homeIncome = sumBy(data.home.incomes.filter(i => i.type === 'monthly'), 'amount');
         const homeFixed = getMonthlyFixedTotal(data.home.fixedExpenses);
         const homeCards = getTotalCardCharges('home');
-        const bizIncome = sumBy(data.business.incomes.filter(i => i.status === 'received'), 'amount');
+        const homeVar = sumBy(data.home.variableExpenses.filter(e => {
+            const d = new Date(e.date); const n = new Date();
+            return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+        }), 'amount');
+        const homeTransfersIn = sumBy(data.business.transfers.filter(t => {
+            const d = new Date(t.date); const n = new Date();
+            return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+        }), 'amount');
+        const totalExpHome = homeFixed + homeCards + homeVar;
+        const homeNetMonthly = homeIncome + homeTransfersIn - totalExpHome;
+
+        // Business calculations
+        const bizReceived = sumBy(data.business.incomes.filter(i => i.status === 'received'), 'amount');
+        const bizExpected = sumBy(data.business.incomes.filter(i => i.status === 'expected'), 'amount');
         const bizFixed = getMonthlyFixedTotal(data.business.fixedExpenses);
         const bizCards = getTotalCardCharges('business');
+        const bizVar = sumBy(data.business.variableExpenses.filter(e => {
+            const d = new Date(e.date); const n = new Date();
+            return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+        }), 'amount');
         const salaryTotal = getTotalSalaryCost();
-        const totalExpHome = homeFixed + homeCards;
-        const totalExpBiz = bizFixed + bizCards + salaryTotal;
+        const bizTransfersOut = sumBy(data.business.transfers.filter(t => {
+            const d = new Date(t.date); const n = new Date();
+            return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+        }), 'amount');
+        const totalExpBiz = bizFixed + bizCards + bizVar + salaryTotal + bizTransfersOut;
+        const bizNetMonthly = bizReceived - totalExpBiz;
+
+        // Loans per account
+        const homeLoans = (data.loans || []).filter(l => l.active && l.account === 'home');
+        const bizLoans = (data.loans || []).filter(l => l.active && l.account === 'business');
+        const homeLoansMonthly = homeLoans.reduce((s, l) => s + (l.totalInstallments - l.installmentsPaid > 0 ? l.monthlyPayment : 0), 0);
+        const bizLoansMonthly = bizLoans.reduce((s, l) => s + (l.totalInstallments - l.installmentsPaid > 0 ? l.monthlyPayment : 0), 0);
+
+        // Credit framework
+        const creditFramework = data.settings.creditFramework || { home: 0, business: 0 };
+        const availableHome = data.home.balance + (creditFramework.home || 0);
+        const availableBiz = data.business.balance + (creditFramework.business || 0);
+
         const alerts = getAlerts();
 
+        // Cards per account
+        const accountCards = data.creditCards.filter(c => c.account === this.activeAccount);
+
         return `
-            <div class="summary-grid">
-                <div class="summary-card green">
-                    <div class="label">יתרת בית</div>
-                    <div class="value ${data.home.balance >= 0 ? 'positive' : 'negative'}">${formatCurrency(data.home.balance)}</div>
-                    <div class="sub">הכנסה חודשית: ${formatCurrency(homeIncome)}</div>
-                </div>
-                <div class="summary-card blue">
-                    <div class="label">יתרת עסק</div>
-                    <div class="value ${data.business.balance >= 0 ? 'positive' : 'negative'}">${formatCurrency(data.business.balance)}</div>
-                    <div class="sub">הכנסות החודש: ${formatCurrency(bizIncome)}</div>
-                </div>
-                <div class="summary-card red">
-                    <div class="label">הוצאות קבועות בית</div>
-                    <div class="value negative">${formatCurrency(totalExpHome)}</div>
-                    <div class="sub">נטו: ${formatCurrency(homeIncome - totalExpHome)}</div>
-                </div>
-                <div class="summary-card red">
-                    <div class="label">הוצאות קבועות עסק</div>
-                    <div class="value negative">${formatCurrency(totalExpBiz)}</div>
-                    <div class="sub">נטו: ${formatCurrency(bizIncome - totalExpBiz)}</div>
-                </div>
+            <div class="daily-filters" style="margin-bottom:16px;display:flex;gap:8px;">
+                <button class="btn ${this.activeAccount === 'home' ? 'btn-primary' : 'btn-ghost'}" onclick="Dashboard.setAccount('home')">🏠 בית</button>
+                <button class="btn ${this.activeAccount === 'business' ? 'btn-primary' : 'btn-ghost'}" onclick="Dashboard.setAccount('business')">💼 עסק</button>
             </div>
+
+            ${isHome ? this._renderHomeSummary(data, homeIncome, homeFixed, homeCards, homeVar, homeTransfersIn, homeLoansMonthly, homeNetMonthly, availableHome, creditFramework) :
+                        this._renderBizSummary(data, bizReceived, bizExpected, bizFixed, bizCards, bizVar, salaryTotal, bizTransfersOut, bizLoansMonthly, bizNetMonthly, availableBiz, creditFramework)}
 
             <div class="grid-2">
                 <div class="card">
                     <div class="card-header">
-                        <h3>📈 תחזית תזרים - 6 חודשים</h3>
+                        <h3>📈 תחזית תזרים - 6 חודשים ${isHome ? '(בית)' : '(עסק)'}</h3>
                     </div>
                     <div class="chart-container">
                         <canvas id="forecast-chart"></canvas>
@@ -50,10 +75,10 @@ const Dashboard = {
                 </div>
                 <div class="card">
                     <div class="card-header">
-                        <h3>📊 הכנסות מול הוצאות - החודש</h3>
+                        <h3>📊 פירוט הוצאות - החודש</h3>
                     </div>
                     <div class="chart-container">
-                        <canvas id="income-expense-chart"></canvas>
+                        <canvas id="expense-breakdown-chart"></canvas>
                     </div>
                 </div>
             </div>
@@ -68,10 +93,10 @@ const Dashboard = {
                 </div>
                 <div class="card">
                     <div class="card-header">
-                        <h3>💳 כרטיסי אשראי - סיכום</h3>
+                        <h3>💳 כרטיסי אשראי ${isHome ? '- בית' : '- עסק'}</h3>
                     </div>
-                    ${data.creditCards.length === 0 ? '<div class="empty-state"><p>אין כרטיסים מוגדרים</p></div>' :
-                    data.creditCards.map(card => {
+                    ${accountCards.length === 0 ? '<div class="empty-state"><p>אין כרטיסים לחשבון זה</p></div>' :
+                    accountCards.map(card => {
                         const usage = getMonthlyCardCharges(card);
                         const pct = Math.min(100, Math.round((usage / card.limit) * 100));
                         const color = pct > 80 ? 'red' : pct > 50 ? 'yellow' : 'green';
@@ -87,24 +112,26 @@ const Dashboard = {
                 </div>
             </div>
 
+            ${isHome ? `
             <div class="grid-2">
                 <div class="card">
-                    <div class="card-header">
-                        <h3>💰 הכנסות צפויות מלקוחות</h3>
-                    </div>
-                    ${data.business.incomes.filter(i => i.status === 'expected').length === 0 ?
-                    '<div class="empty-state"><p>אין הכנסות צפויות</p></div>' :
-                    `<div class="table-wrapper"><table>
-                        <thead><tr><th>לקוח</th><th>סכום</th><th>תאריך צפוי</th><th>סטטוס</th></tr></thead>
-                        <tbody>${data.business.incomes.filter(i => i.status === 'expected' || i.status === 'late').map(i => `
-                            <tr><td>${i.clientName}</td><td class="amount-positive">${formatCurrency(i.amount)}</td><td>${formatDate(i.expectedDate)}</td><td>${statusBadge(i.status)}</td></tr>
-                        `).join('')}</tbody>
-                    </table></div>`}
+                    <div class="card-header"><h3>🏦 הלוואות בית</h3></div>
+                    ${homeLoans.length === 0 ? '<div class="empty-state"><p>אין הלוואות פעילות</p></div>' :
+                    homeLoans.map(l => {
+                        const remaining = l.totalInstallments - l.installmentsPaid;
+                        const pct = Math.round((l.installmentsPaid / l.totalInstallments) * 100);
+                        return `
+                            <div style="margin-bottom:14px;">
+                                <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:4px;">
+                                    <span>${l.name}</span>
+                                    <span>${formatCurrency(l.monthlyPayment)} | נותרו ${remaining} תשלומים</span>
+                                </div>
+                                <div class="progress-bar"><div class="fill green" style="width:${pct}%"></div></div>
+                            </div>`;
+                    }).join('')}
                 </div>
                 <div class="card">
-                    <div class="card-header">
-                        <h3>🎯 יעדי חיסכון</h3>
-                    </div>
+                    <div class="card-header"><h3>🎯 יעדי חיסכון</h3></div>
                     ${data.savingGoals.length === 0 ? '<div class="empty-state"><p>לא הוגדרו יעדים</p></div>' :
                     data.savingGoals.map(g => {
                         const pct = Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100));
@@ -119,12 +146,98 @@ const Dashboard = {
                     }).join('')}
                 </div>
             </div>
+            ` : `
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header"><h3>💰 הכנסות צפויות מלקוחות</h3></div>
+                    ${data.business.incomes.filter(i => i.status === 'expected' || i.status === 'late').length === 0 ?
+                    '<div class="empty-state"><p>אין הכנסות צפויות</p></div>' :
+                    '<div class="table-wrapper"><table><thead><tr><th>לקוח</th><th>סכום</th><th>תאריך צפוי</th><th>סטטוס</th></tr></thead><tbody>' +
+                    data.business.incomes.filter(i => i.status === 'expected' || i.status === 'late').map(i =>
+                        '<tr><td>' + i.clientName + '</td><td class="amount-positive">' + formatCurrency(i.amount) + '</td><td>' + formatDate(i.expectedDate) + '</td><td>' + statusBadge(i.status) + '</td></tr>'
+                    ).join('') + '</tbody></table></div>'}
+                </div>
+                <div class="card">
+                    <div class="card-header"><h3>🏦 הלוואות עסק</h3></div>
+                    ${bizLoans.length === 0 ? '<div class="empty-state"><p>אין הלוואות פעילות</p></div>' :
+                    bizLoans.map(l => {
+                        const remaining = l.totalInstallments - l.installmentsPaid;
+                        const pct = Math.round((l.installmentsPaid / l.totalInstallments) * 100);
+                        return `
+                            <div style="margin-bottom:14px;">
+                                <div style="display:flex;justify-content:space-between;font-size:0.85rem;margin-bottom:4px;">
+                                    <span>${l.name}</span>
+                                    <span>${formatCurrency(l.monthlyPayment)} | נותרו ${remaining} תשלומים</span>
+                                </div>
+                                <div class="progress-bar"><div class="fill green" style="width:${pct}%"></div></div>
+                            </div>`;
+                    }).join('')}
+                </div>
+            </div>
+            `}
         `;
+    },
+
+    _renderHomeSummary(data, income, fixed, cards, variable, transfersIn, loansMonthly, netMonthly, available, creditFramework) {
+        return `
+            <div class="summary-grid">
+                <div class="summary-card green">
+                    <div class="label">יתרת בנק</div>
+                    <div class="value ${data.home.balance >= 0 ? 'positive' : 'negative'}">${formatCurrency(data.home.balance)}</div>
+                    <div class="sub">${creditFramework.home > 0 ? 'זמין: ' + formatCurrency(available) : ''}</div>
+                </div>
+                <div class="summary-card blue">
+                    <div class="label">הכנסות חודשיות</div>
+                    <div class="value positive">${formatCurrency(income)}</div>
+                    <div class="sub">${transfersIn > 0 ? '+ העברות מעסק: ' + formatCurrency(transfersIn) : ''}</div>
+                </div>
+                <div class="summary-card red">
+                    <div class="label">הוצאות החודש</div>
+                    <div class="value negative">${formatCurrency(fixed + cards + variable + loansMonthly)}</div>
+                    <div class="sub">קבועות: ${formatCurrency(fixed)} | כרטיסים: ${formatCurrency(cards)}</div>
+                </div>
+                <div class="summary-card ${netMonthly >= 0 ? 'green' : 'red'}">
+                    <div class="label">נטו חודשי</div>
+                    <div class="value ${netMonthly >= 0 ? 'positive' : 'negative'}">${formatCurrency(netMonthly)}</div>
+                    <div class="sub">${loansMonthly > 0 ? 'הלוואות: ' + formatCurrency(loansMonthly) : ''}</div>
+                </div>
+            </div>`;
+    },
+
+    _renderBizSummary(data, received, expected, fixed, cards, variable, salaries, transfersOut, loansMonthly, netMonthly, available, creditFramework) {
+        return `
+            <div class="summary-grid">
+                <div class="summary-card blue">
+                    <div class="label">יתרת בנק</div>
+                    <div class="value ${data.business.balance >= 0 ? 'positive' : 'negative'}">${formatCurrency(data.business.balance)}</div>
+                    <div class="sub">${creditFramework.business > 0 ? 'זמין: ' + formatCurrency(available) : ''}</div>
+                </div>
+                <div class="summary-card green">
+                    <div class="label">הכנסות שהתקבלו</div>
+                    <div class="value positive">${formatCurrency(received)}</div>
+                    <div class="sub">צפוי: ${formatCurrency(expected)}</div>
+                </div>
+                <div class="summary-card red">
+                    <div class="label">הוצאות החודש</div>
+                    <div class="value negative">${formatCurrency(fixed + cards + variable + salaries + loansMonthly)}</div>
+                    <div class="sub">קבועות: ${formatCurrency(fixed)} | שכר: ${formatCurrency(salaries)}</div>
+                </div>
+                <div class="summary-card ${netMonthly >= 0 ? 'green' : 'red'}">
+                    <div class="label">נטו חודשי</div>
+                    <div class="value ${netMonthly >= 0 ? 'positive' : 'negative'}">${formatCurrency(netMonthly)}</div>
+                    <div class="sub">העברות לבית: ${formatCurrency(transfersOut)}</div>
+                </div>
+            </div>`;
+    },
+
+    setAccount(account) {
+        this.activeAccount = account;
+        App.renderPage('dashboard');
     },
 
     afterRender() {
         this.renderForecastChart();
-        this.renderIncomeExpenseChart();
+        this.renderExpenseBreakdownChart();
     },
 
     renderForecastChart() {
@@ -133,26 +246,37 @@ const Dashboard = {
         if (this.charts.forecast) this.charts.forecast.destroy();
 
         const forecast = getForecastData(6);
+        const isHome = this.activeAccount === 'home';
+
         this.charts.forecast = new Chart(canvas, {
             type: 'line',
             data: {
                 labels: forecast.map(f => f.label),
                 datasets: [
                     {
-                        label: 'נטו בית',
-                        data: forecast.map(f => f.homeNet),
+                        label: isHome ? 'הכנסות בית' : 'הכנסות עסק',
+                        data: forecast.map(f => isHome ? f.homeIncome : f.bizIncome),
                         borderColor: '#10b981',
                         backgroundColor: 'rgba(16,185,129,0.1)',
                         fill: true,
                         tension: 0.4
                     },
                     {
-                        label: 'נטו עסק',
-                        data: forecast.map(f => f.bizNet),
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59,130,246,0.1)',
+                        label: isHome ? 'הוצאות בית' : 'הוצאות עסק',
+                        data: forecast.map(f => isHome ? f.homeExpenses : f.bizExpenses),
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239,68,68,0.1)',
                         fill: true,
                         tension: 0.4
+                    },
+                    {
+                        label: 'נטו',
+                        data: forecast.map(f => isHome ? f.homeNet : f.bizNet),
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59,130,246,0.05)',
+                        fill: false,
+                        tension: 0.4,
+                        borderDash: [5, 5]
                     }
                 ]
             },
@@ -170,35 +294,69 @@ const Dashboard = {
         });
     },
 
-    renderIncomeExpenseChart() {
-        const canvas = document.getElementById('income-expense-chart');
+    renderExpenseBreakdownChart() {
+        const canvas = document.getElementById('expense-breakdown-chart');
         if (!canvas) return;
-        if (this.charts.incomeExpense) this.charts.incomeExpense.destroy();
+        if (this.charts.expenseBreakdown) this.charts.expenseBreakdown.destroy();
 
         const data = Store.get();
-        const homeIncome = sumBy(data.home.incomes.filter(i => i.type === 'monthly'), 'amount');
-        const homeExp = getMonthlyFixedTotal(data.home.fixedExpenses) + getTotalCardCharges('home');
-        const bizIncome = sumBy(data.business.incomes.filter(i => i.status === 'received'), 'amount');
-        const bizExp = getMonthlyFixedTotal(data.business.fixedExpenses) + getTotalCardCharges('business') + getTotalSalaryCost();
+        const isHome = this.activeAccount === 'home';
 
-        this.charts.incomeExpense = new Chart(canvas, {
-            type: 'bar',
+        let labels, values, colors;
+
+        if (isHome) {
+            const fixed = getMonthlyFixedTotal(data.home.fixedExpenses);
+            const cards = getTotalCardCharges('home');
+            const variable = sumBy(data.home.variableExpenses.filter(e => {
+                const d = new Date(e.date); const n = new Date();
+                return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+            }), 'amount');
+            labels = ['הוצאות קבועות', 'כרטיסי אשראי', 'הוצאות משתנות'];
+            values = [fixed, cards, variable];
+            colors = ['#ef4444', '#a855f7', '#f59e0b'];
+        } else {
+            const fixed = getMonthlyFixedTotal(data.business.fixedExpenses);
+            const cards = getTotalCardCharges('business');
+            const salaries = getTotalSalaryCost();
+            const variable = sumBy(data.business.variableExpenses.filter(e => {
+                const d = new Date(e.date); const n = new Date();
+                return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+            }), 'amount');
+            const transfers = sumBy(data.business.transfers.filter(t => {
+                const d = new Date(t.date); const n = new Date();
+                return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+            }), 'amount');
+            labels = ['הוצאות קבועות', 'כרטיסי אשראי', 'שכר צוות', 'הוצאות משתנות', 'העברות לבית'];
+            values = [fixed, cards, salaries, variable, transfers];
+            colors = ['#ef4444', '#a855f7', '#3b82f6', '#f59e0b', '#8b5cf6'];
+        }
+
+        this.charts.expenseBreakdown = new Chart(canvas, {
+            type: 'doughnut',
             data: {
-                labels: ['בית', 'עסק'],
-                datasets: [
-                    { label: 'הכנסות', data: [homeIncome, bizIncome], backgroundColor: '#10b981', borderRadius: 6 },
-                    { label: 'הוצאות', data: [homeExp, bizExp], backgroundColor: '#ef4444', borderRadius: 6 }
-                ]
+                labels,
+                datasets: [{
+                    data: values,
+                    backgroundColor: colors,
+                    borderWidth: 0,
+                    hoverOffset: 8
+                }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { labels: { color: '#8b95a8', font: { family: 'Rubik' } } }
-                },
-                scales: {
-                    x: { ticks: { color: '#5a6478' }, grid: { display: false } },
-                    y: { ticks: { color: '#5a6478', callback: v => formatCurrency(v) }, grid: { color: 'rgba(42,53,80,0.5)' } }
+                    legend: {
+                        position: 'bottom',
+                        labels: { color: '#8b95a8', font: { family: 'Rubik', size: 12 }, padding: 16 }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                return ctx.label + ': ' + formatCurrency(ctx.raw);
+                            }
+                        }
+                    }
                 }
             }
         });

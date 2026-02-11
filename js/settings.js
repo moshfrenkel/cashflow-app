@@ -17,6 +17,19 @@ const Settings = {
                 </div>
 
                 <div class="card">
+                    <div class="card-header"><h3>💳 מסגרת אשראי</h3></div>
+                    <div class="form-group">
+                        <label>מסגרת אשראי - חשבון בית</label>
+                        <input type="number" id="set-credit-home" value="${data.settings.creditFramework?.home || 0}" onchange="Settings.updateCreditFramework('home', this.value)">
+                    </div>
+                    <div class="form-group">
+                        <label>מסגרת אשראי - חשבון עסק</label>
+                        <input type="number" id="set-credit-biz" value="${data.settings.creditFramework?.business || 0}" onchange="Settings.updateCreditFramework('business', this.value)">
+                    </div>
+                    <p style="font-size:0.8rem;color:var(--text-muted);margin-top:8px;">מסגרת אשראי בבנק (אוברדרפט) - משמש לחישוב יתרה זמינה</p>
+                </div>
+
+                <div class="card">
                     <div class="card-header"><h3>📁 קטגוריות בית</h3></div>
                     <div id="home-cats">
                         ${data.categories.home.map((c, i) => `
@@ -92,6 +105,14 @@ const Settings = {
             data[account].balance = parseFloat(value) || 0;
         });
         showToast('יתרה עודכנה', 'success');
+    },
+
+    updateCreditFramework(account, value) {
+        Store.update(data => {
+            if (!data.settings.creditFramework) data.settings.creditFramework = { home: 0, business: 0 };
+            data.settings.creditFramework[account] = parseFloat(value) || 0;
+        });
+        showToast('מסגרת אשראי עודכנה', 'success');
     },
 
     updateCategory(account, index, value) {

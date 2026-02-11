@@ -27,15 +27,15 @@ const Dashboard = {
                     <div class="value ${data.business.balance >= 0 ? 'positive' : 'negative'}">${formatCurrency(data.business.balance)}</div>
                     <div class="sub">הכנסות החודש: ${formatCurrency(bizIncome)}</div>
                 </div>
-                <div class="summary-card purple">
-                    <div class="label">סה"כ משולב</div>
-                    <div class="value ${(data.home.balance + data.business.balance) >= 0 ? 'positive' : 'negative'}">${formatCurrency(data.home.balance + data.business.balance)}</div>
-                    <div class="sub">שני חשבונות</div>
+                <div class="summary-card red">
+                    <div class="label">הוצאות קבועות בית</div>
+                    <div class="value negative">${formatCurrency(totalExpHome)}</div>
+                    <div class="sub">נטו: ${formatCurrency(homeIncome - totalExpHome)}</div>
                 </div>
                 <div class="summary-card red">
-                    <div class="label">הוצאות קבועות החודש</div>
-                    <div class="value negative">${formatCurrency(totalExpHome + totalExpBiz)}</div>
-                    <div class="sub">בית: ${formatCurrency(totalExpHome)} | עסק: ${formatCurrency(totalExpBiz)}</div>
+                    <div class="label">הוצאות קבועות עסק</div>
+                    <div class="value negative">${formatCurrency(totalExpBiz)}</div>
+                    <div class="sub">נטו: ${formatCurrency(bizIncome - totalExpBiz)}</div>
                 </div>
             </div>
 

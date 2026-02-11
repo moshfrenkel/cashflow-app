@@ -103,16 +103,16 @@ function getTotalCardCharges(account) {
         .reduce((sum, card) => sum + getMonthlyCardCharges(card), 0);
 }
 
-// Calculate employer cost (~30% on top)
+// Calculate employer cost - disabled (freelancers, no employer costs)
 function calcEmployerCost(gross) {
-    return Math.round(gross * 0.3);
+    return 0;
 }
 
-// Get total monthly salary cost
+// Get total monthly salary cost (freelancers - no employer costs)
 function getTotalSalaryCost() {
     const data = Store.get();
     return data.employees.filter(e => e.active).reduce((sum, e) => {
-        return sum + e.grossSalary + calcEmployerCost(e.grossSalary);
+        return sum + e.grossSalary;
     }, 0);
 }
 

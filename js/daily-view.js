@@ -2,7 +2,7 @@
 const DailyView = {
     currentMonth: null,
     currentYear: null,
-    activeAccount: 'combined', // 'home', 'business', 'combined'
+    activeAccount: 'home', // 'home' or 'business'
 
     init() {
         const now = new Date();
@@ -44,9 +44,10 @@ const DailyView = {
                 entries,
                 balanceHome: runningHome,
                 balanceBiz: runningBiz,
-                balanceCombined: runningHome + runningBiz,
-                totalIncome: dayIncomeHome + dayIncomeBiz,
-                totalExpense: dayExpenseHome + dayExpenseBiz,
+                totalIncomeHome: dayIncomeHome,
+                totalExpenseHome: dayExpenseHome,
+                totalIncomeBiz: dayIncomeBiz,
+                totalExpenseBiz: dayExpenseBiz,
                 isToday: isCurrentMonth && day === todayDate,
                 isPast: isCurrentMonth ? day < todayDate : (this.currentYear < today.getFullYear() || (this.currentYear === today.getFullYear() && this.currentMonth < today.getMonth())),
                 isFuture: isCurrentMonth ? day > todayDate : (this.currentYear > today.getFullYear() || (this.currentYear === today.getFullYear() && this.currentMonth > today.getMonth()))
@@ -63,7 +64,6 @@ const DailyView = {
                     <button class="btn btn-ghost" onclick="DailyView.nextMonth()">←</button>
                 </div>
                 <div class="daily-filters">
-                    <button class="btn ${this.activeAccount === 'combined' ? 'btn-primary' : 'btn-ghost'}" onclick="DailyView.setAccount('combined')">משולב</button>
                     <button class="btn ${this.activeAccount === 'home' ? 'btn-primary' : 'btn-ghost'}" onclick="DailyView.setAccount('home')">בית</button>
                     <button class="btn ${this.activeAccount === 'business' ? 'btn-primary' : 'btn-ghost'}" onclick="DailyView.setAccount('business')">עסק</button>
                 </div>
@@ -76,11 +76,11 @@ const DailyView = {
                 </div>
                 <div class="daily-summary-item">
                     <span class="daily-summary-label">סה"כ הכנסות</span>
-                    <span class="daily-summary-value positive">${formatCurrency(days.reduce((s, d) => s + d.totalIncome, 0))}</span>
+                    <span class="daily-summary-value positive">${formatCurrency(days.reduce((s, d) => s + (this.activeAccount === 'business' ? d.totalIncomeBiz : d.totalIncomeHome), 0))}</span>
                 </div>
                 <div class="daily-summary-item">
                     <span class="daily-summary-label">סה"כ הוצאות</span>
-                    <span class="daily-summary-value negative">${formatCurrency(days.reduce((s, d) => s + d.totalExpense, 0))}</span>
+                    <span class="daily-summary-value negative">${formatCurrency(days.reduce((s, d) => s + (this.activeAccount === 'business' ? d.totalExpenseBiz : d.totalExpenseHome), 0))}</span>
                 </div>
                 <div class="daily-summary-item">
                     <span class="daily-summary-label">יתרת סגירה</span>
@@ -134,15 +134,13 @@ const DailyView = {
 
     _getOpeningBalance() {
         const data = Store.get();
-        if (this.activeAccount === 'home') return data.home.balance;
         if (this.activeAccount === 'business') return data.business.balance;
-        return data.home.balance + data.business.balance;
+        return data.home.balance;
     },
 
     _balanceKey() {
-        if (this.activeAccount === 'home') return 'balanceHome';
         if (this.activeAccount === 'business') return 'balanceBiz';
-        return 'balanceCombined';
+        return 'balanceHome';
     },
 
     _balanceClass(val) {
@@ -150,7 +148,6 @@ const DailyView = {
     },
 
     _filterEntries(entries) {
-        if (this.activeAccount === 'combined') return entries;
         return entries.filter(e => e.account === this.activeAccount);
     },
 
@@ -202,10 +199,24 @@ const DailyView = {
             }
         });
 
-        // Business transfers by date
+        // Business transfers by date (expense for business)
         data.business.transfers.forEach(t => {
             if (this._dateMatchesDay(t.date, dateStr)) {
                 entries.push({ name: 'העברה לבית' + (t.notes ? ` (${t.notes})` : ''), amount: t.amount, type: 'expense', account: 'business', icon: '↔️', sourceType: 'biz-transfer', sourceId: t.id, editable: true });
+            }
+        });
+
+        // Transfer sync: business transfers also appear as home income
+        data.business.transfers.forEach(t => {
+            if (this._dateMatchesDay(t.date, dateStr)) {
+                entries.push({ name: 'העברה מעסק' + (t.notes ? ` (${t.notes})` : ''), amount: t.amount, type: 'income', account: 'home', icon: '↔️', sourceType: 'biz-transfer', sourceId: t.id, editable: false });
+            }
+        });
+
+        // --- LOANS ---
+        (data.loans || []).filter(l => l.active && (l.totalInstallments - l.installmentsPaid) > 0).forEach(loan => {
+            if (loan.chargeDate === dayOfMonth) {
+                entries.push({ name: loan.name, amount: loan.monthlyPayment, type: 'expense', account: loan.account, icon: '🏦', sourceType: 'loan', sourceId: loan.id, editable: false });
             }
         });
 
@@ -258,16 +269,26 @@ const DailyView = {
     // --- Add Entry ---
     openAddEntry(dateStr, dayOfMonth) {
         const cats = Store.get().categories;
+        const isHome = this.activeAccount === 'home';
+        const defaultCats = isHome ? cats.home : cats.business;
         openModal('הוספת רשומה', `
             <div class="form-row">
                 <div class="form-group">
                     <label>סוג</label>
                     <select id="de-type" onchange="DailyView._onTypeChange()">
+                        ${isHome ? `
                         <option value="home-variable">הוצאה בית</option>
                         <option value="home-income">הכנסה בית</option>
                         <option value="biz-variable">הוצאה עסק</option>
                         <option value="biz-income">הכנסה עסק</option>
                         <option value="biz-transfer">העברה לבית</option>
+                        ` : `
+                        <option value="biz-variable">הוצאה עסק</option>
+                        <option value="biz-income">הכנסה עסק</option>
+                        <option value="biz-transfer">העברה לבית</option>
+                        <option value="home-variable">הוצאה בית</option>
+                        <option value="home-income">הכנסה בית</option>
+                        `}
                     </select>
                 </div>
                 <div class="form-group">
@@ -281,7 +302,7 @@ const DailyView = {
                 <div class="form-group" id="de-category-group">
                     <label>קטגוריה</label>
                     <select id="de-category">
-                        ${cats.home.map(c => `<option value="${c}">${c}</option>`).join('')}
+                        ${defaultCats.map(c => `<option value="${c}">${c}</option>`).join('')}
                     </select>
                 </div>
             </div>

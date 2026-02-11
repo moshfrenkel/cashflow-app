@@ -20,13 +20,14 @@ const Store = {
                 transfers: []
             },
             creditCards: [],
+            loans: [],
             employees: [],
             savingGoals: [],
             categories: {
                 home: ['קבועות', 'בית', 'ילדים', 'רפואה', 'ביטוחים', 'רכב ותחבורה', 'תקשורת', 'בילויים', 'שונות'],
                 business: ['קבועות', 'שכר', 'שיווק', 'ציוד', 'תחבורה', 'שונות']
             },
-            settings: { theme: 'dark', currency: '₪' }
+            settings: { theme: 'dark', currency: '₪', creditFramework: { home: 0, business: 0 } }
         };
     },
 
@@ -253,18 +254,18 @@ const Store = {
 
         // Home fixed expenses
         data.home.fixedExpenses = [
-            { id: this.genId(), name: 'שכר דירה', amount: 6400, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true },
-            { id: this.genId(), name: 'ועד בית', amount: 250, category: 'קבועות', frequency: 'monthly', chargeDate: 5, active: true },
-            { id: this.genId(), name: 'הלוואה ריבית', amount: 937, category: 'קבועות', frequency: 'monthly', chargeDate: 20, active: true },
-            { id: this.genId(), name: 'הלוואה קרן', amount: 873, category: 'קבועות', frequency: 'monthly', chargeDate: 20, active: true },
-            { id: this.genId(), name: 'גן גל', amount: 3900, category: 'ילדים', frequency: 'monthly', chargeDate: 1, active: true },
-            { id: this.genId(), name: 'ביטוח בריאות משלים', amount: 361, category: 'ביטוחים', frequency: 'monthly', chargeDate: 1, active: true },
-            { id: this.genId(), name: 'ביטוח חיים', amount: 116, category: 'ביטוחים', frequency: 'monthly', chargeDate: 1, active: true },
-            { id: this.genId(), name: 'סלקום אינטרנט', amount: 104, category: 'תקשורת', frequency: 'monthly', chargeDate: 15, active: true },
-            { id: this.genId(), name: 'סלקום סלולר', amount: 105, category: 'תקשורת', frequency: 'monthly', chargeDate: 15, active: true },
-            { id: this.genId(), name: 'נטפליקס', amount: 55, category: 'תקשורת', frequency: 'monthly', chargeDate: 15, active: true },
-            { id: this.genId(), name: 'קאנטרי גבעתיים', amount: 524, category: 'רפואה', frequency: 'monthly', chargeDate: 1, active: true },
-            { id: this.genId(), name: 'פנסיון רודי', amount: 1400, category: 'שונות', frequency: 'monthly', chargeDate: 1, active: true }
+            { id: this.genId(), name: 'שכר דירה', amount: 6400, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'ועד בית', amount: 250, category: 'קבועות', frequency: 'monthly', chargeDate: 5, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'הלוואה ריבית', amount: 937, category: 'קבועות', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'הלוואה קרן', amount: 873, category: 'קבועות', frequency: 'monthly', chargeDate: 20, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'גן גל', amount: 3900, category: 'ילדים', frequency: 'monthly', chargeDate: 1, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 12, paymentsMade: 5 },
+            { id: this.genId(), name: 'ביטוח בריאות משלים', amount: 361, category: 'ביטוחים', frequency: 'monthly', chargeDate: 1, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'ביטוח חיים', amount: 116, category: 'ביטוחים', frequency: 'monthly', chargeDate: 1, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'סלקום אינטרנט', amount: 104, category: 'תקשורת', frequency: 'monthly', chargeDate: 15, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'סלקום סלולר', amount: 105, category: 'תקשורת', frequency: 'monthly', chargeDate: 15, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'נטפליקס', amount: 55, category: 'תקשורת', frequency: 'monthly', chargeDate: 15, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'קאנטרי גבעתיים', amount: 524, category: 'רפואה', frequency: 'monthly', chargeDate: 1, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'פנסיון רודי', amount: 1400, category: 'שונות', frequency: 'monthly', chargeDate: 1, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 0, paymentsMade: 0 }
         ];
 
         // Home variable expenses
@@ -289,14 +290,14 @@ const Store = {
         ];
 
         data.business.fixedExpenses = [
-            { id: this.genId(), name: 'ביטוח לאומי', amount: 376, category: 'קבועות', frequency: 'monthly', chargeDate: 15, active: true },
-            { id: this.genId(), name: 'הלוואה ב.לאומי 21', amount: 554, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true },
-            { id: this.genId(), name: 'הלוואה ב.לאומי 22', amount: 656, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true },
-            { id: this.genId(), name: 'ביטוח מקצועי כלל', amount: 70, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true },
-            { id: this.genId(), name: 'ביטוח מקצועי פניקס', amount: 110, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true },
-            { id: this.genId(), name: 'בריין בינה', amount: 37, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true },
-            { id: this.genId(), name: 'הלוואה', amount: 4122, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true },
-            { id: this.genId(), name: 'החזר גישור', amount: 22098, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true }
+            { id: this.genId(), name: 'ביטוח לאומי', amount: 376, category: 'קבועות', frequency: 'monthly', chargeDate: 15, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'הלוואה ב.לאומי 21', amount: 554, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 60, paymentsMade: 36 },
+            { id: this.genId(), name: 'הלוואה ב.לאומי 22', amount: 656, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 60, paymentsMade: 24 },
+            { id: this.genId(), name: 'ביטוח מקצועי כלל', amount: 70, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'ביטוח מקצועי פניקס', amount: 110, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'בריין בינה', amount: 37, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true, paymentMethod: 'credit', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
+            { id: this.genId(), name: 'הלוואה', amount: 4122, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 36, paymentsMade: 12 },
+            { id: this.genId(), name: 'החזר גישור', amount: 22098, category: 'קבועות', frequency: 'monthly', chargeDate: 1, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 6, paymentsMade: 2 }
         ];
 
         data.business.variableExpenses = [
@@ -338,14 +339,14 @@ const Store = {
             }
         ];
 
-        // Employees
+        // Employees (freelancers)
         data.employees = [
-            { id: this.genId(), name: 'לירז', role: 'עובד/ת', grossSalary: 160, paymentDate: 9, active: true, payments: [] },
-            { id: this.genId(), name: 'ימית', role: 'עובד/ת', grossSalary: 2520, paymentDate: 9, active: true, payments: [] },
-            { id: this.genId(), name: 'עודד', role: 'עובד/ת', grossSalary: 2340, paymentDate: 9, active: true, payments: [] },
-            { id: this.genId(), name: 'נדיה', role: 'עובד/ת', grossSalary: 3000, paymentDate: 9, active: true, payments: [] },
-            { id: this.genId(), name: 'ליאור', role: 'עובד/ת', grossSalary: 3000, paymentDate: 10, active: true, payments: [] },
-            { id: this.genId(), name: 'רומי', role: 'עובד/ת', grossSalary: 2040, paymentDate: 9, active: true, payments: [] }
+            { id: this.genId(), name: 'לירז', role: 'פרילנסר/ית', grossSalary: 160, paymentDate: 9, active: true, payments: [] },
+            { id: this.genId(), name: 'ימית', role: 'פרילנסר/ית', grossSalary: 2520, paymentDate: 9, active: true, payments: [] },
+            { id: this.genId(), name: 'עודד', role: 'פרילנסר/ית', grossSalary: 2340, paymentDate: 9, active: true, payments: [] },
+            { id: this.genId(), name: 'נדיה', role: 'פרילנסר/ית', grossSalary: 3000, paymentDate: 9, active: true, payments: [] },
+            { id: this.genId(), name: 'ליאור', role: 'פרילנסר/ית', grossSalary: 3000, paymentDate: 10, active: true, payments: [] },
+            { id: this.genId(), name: 'רומי', role: 'פרילנסר/ית', grossSalary: 2040, paymentDate: 9, active: true, payments: [] }
         ];
 
         // Saving Goals

@@ -8,6 +8,7 @@ const App = {
         'home-cashflow': { title: 'תזרים בית', module: () => HomeCashflow },
         'business-cashflow': { title: 'תזרים עסק', module: () => BusinessCashflow },
         'credit-cards': { title: 'כרטיסי אשראי', module: () => CreditCards },
+        'loans': { title: 'הלוואות', module: () => Loans },
         'salaries': { title: 'משכורות', module: () => Salaries },
         'forecast': { title: 'תחזית ותכנון', module: () => Forecast },
         'reports': { title: 'דוחות', module: () => Reports },

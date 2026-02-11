@@ -108,13 +108,22 @@ const HomeCashflow = {
                             <span style="color:var(--red);font-weight:600;">${formatCurrency(expenses.filter(e=>e.active).reduce((s,e)=>s+e.amount,0))}</span>
                         </div>
                         <div class="table-wrapper"><table>
-                            <thead><tr><th>שם</th><th>סכום</th><th>תדירות</th><th>יום בחודש</th><th>סטטוס</th><th>פעולות</th></tr></thead>
-                            <tbody>${expenses.map(e => `
+                            <thead><tr><th>שם</th><th>סכום</th><th>תדירות</th><th>יום בחודש</th><th>שיטת תשלום</th><th>תשלומים</th><th>סטטוס</th><th>פעולות</th></tr></thead>
+                            <tbody>${expenses.map(e => {
+                                const pmLabels = {bank:'הו"ק בבנק',check:'צ\'ק',credit:'הו"ק בכרטיס',cash:'מזומן',other:'אחר'};
+                                const pmColors = {bank:'blue',check:'yellow',credit:'purple',cash:'green',other:'blue'};
+                                const pm = e.paymentMethod || 'bank';
+                                const ccName = pm === 'credit' && e.creditCardId ? (data.creditCards.find(c => c.id === e.creditCardId) || {}).name || '' : '';
+                                const pmDisplay = ccName ? pmLabels[pm] + ' (' + ccName + ')' : (pmLabels[pm] || pm);
+                                const installDisplay = e.totalPayments > 0 ? (e.paymentsMade || 0) + '/' + e.totalPayments + ' תשלומים' : 'קבוע';
+                                return `
                                 <tr style="${!e.active ? 'opacity:0.4' : ''}">
                                     <td>${e.name}</td>
                                     <td class="amount-negative">${formatCurrency(e.amount)}</td>
                                     <td>${freqLabel(e.frequency)}</td>
                                     <td>${e.chargeDate}</td>
+                                    <td><span class="badge badge-${pmColors[pm] || 'blue'}">${pmDisplay}</span></td>
+                                    <td><span class="badge badge-${e.totalPayments > 0 ? 'yellow' : 'blue'}">${installDisplay}</span></td>
                                     <td><span class="badge badge-${e.active ? 'green' : 'red'}">${e.active ? 'פעיל' : 'מושהה'}</span></td>
                                     <td>
                                         <button class="btn-icon" onclick="HomeCashflow.editFixed('${e.id}')" title="עריכה">✏️</button>
@@ -122,7 +131,7 @@ const HomeCashflow = {
                                         <button class="btn-icon danger" onclick="HomeCashflow.deleteFixed('${e.id}')" title="מחיקה">🗑️</button>
                                     </td>
                                 </tr>
-                            `).join('')}</tbody>
+                            `}).join('')}</tbody>
                         </table></div>
                     </div>
                 `).join('')
@@ -220,6 +229,33 @@ const HomeCashflow = {
         showToast('הכנסה נמחקה', 'info');
     },
 
+    _paymentMethodFields(selected, creditCardId) {
+        const data = Store.get();
+        const cards = data.creditCards.filter(c => c.account === 'home');
+        const pm = selected || 'bank';
+        return `
+            <div class="form-row">
+                <div class="form-group"><label>שיטת תשלום</label>
+                    <select id="fix-pm" onchange="document.getElementById('fix-cc-row').style.display=this.value==='credit'?'block':'none'">
+                        <option value="bank" ${pm==='bank'?'selected':''}>הו"ק בבנק</option>
+                        <option value="check" ${pm==='check'?'selected':''}>צ'ק</option>
+                        <option value="credit" ${pm==='credit'?'selected':''}>הו"ק בכרטיס אשראי</option>
+                        <option value="cash" ${pm==='cash'?'selected':''}>מזומן</option>
+                        <option value="other" ${pm==='other'?'selected':''}>אחר</option>
+                    </select>
+                </div>
+                <div class="form-group"><label>יום חיוב בחודש</label><input type="number" id="fix-date" min="1" max="31" value="1"></div>
+            </div>
+            <div id="fix-cc-row" class="form-group" style="display:${pm==='credit'?'block':'none'}">
+                <label>כרטיס אשראי</label>
+                <select id="fix-cc">${cards.map(c=>`<option value="${c.id}" ${c.id===creditCardId?'selected':''}>${c.name}</option>`).join('')}${cards.length===0?'<option value="">אין כרטיסים</option>':''}</select>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>סה"כ תשלומים (0=קבוע)</label><input type="number" id="fix-total-payments" min="0" value="0"></div>
+                <div class="form-group"><label>תשלומים ששולמו</label><input type="number" id="fix-payments-made" min="0" value="0"></div>
+            </div>`;
+    },
+
     openAddFixed() {
         const cats = Store.get().categories.home;
         openModal('הוספת הוצאה קבועה', `
@@ -228,10 +264,8 @@ const HomeCashflow = {
                 <div class="form-group"><label>סכום</label><input type="number" id="fix-amount" placeholder="0"></div>
                 <div class="form-group"><label>קטגוריה</label><select id="fix-category">${cats.map(c=>`<option value="${c}">${c}</option>`).join('')}</select></div>
             </div>
-            <div class="form-row">
-                <div class="form-group"><label>תדירות</label><select id="fix-freq"><option value="monthly">חודשי</option><option value="bimonthly">דו-חודשי</option><option value="quarterly">רבעוני</option><option value="yearly">שנתי</option></select></div>
-                <div class="form-group"><label>יום חיוב בחודש</label><input type="number" id="fix-date" min="1" max="31" value="1"></div>
-            </div>
+            <div class="form-group"><label>תדירות</label><select id="fix-freq"><option value="monthly">חודשי</option><option value="bimonthly">דו-חודשי</option><option value="quarterly">רבעוני</option><option value="yearly">שנתי</option></select></div>
+            ${this._paymentMethodFields()}
             <div class="modal-actions"><button class="btn btn-primary" onclick="HomeCashflow.saveFixed()">שמור</button><button class="btn btn-ghost" onclick="closeModal()">ביטול</button></div>
         `);
     },
@@ -242,14 +276,18 @@ const HomeCashflow = {
         const category = document.getElementById('fix-category').value;
         const frequency = document.getElementById('fix-freq').value;
         const chargeDate = parseInt(document.getElementById('fix-date').value) || 1;
+        const paymentMethod = document.getElementById('fix-pm').value;
+        const creditCardId = paymentMethod === 'credit' ? (document.getElementById('fix-cc')?.value || '') : '';
+        const totalPayments = parseInt(document.getElementById('fix-total-payments').value) || 0;
+        const paymentsMade = parseInt(document.getElementById('fix-payments-made').value) || 0;
         if (!name || !amount) { showToast('נא למלא שם וסכום', 'error'); return; }
 
         Store.update(data => {
             if (editId) {
                 const idx = data.home.fixedExpenses.findIndex(e => e.id === editId);
-                if (idx >= 0) Object.assign(data.home.fixedExpenses[idx], { name, amount, category, frequency, chargeDate });
+                if (idx >= 0) Object.assign(data.home.fixedExpenses[idx], { name, amount, category, frequency, chargeDate, paymentMethod, creditCardId, totalPayments, paymentsMade });
             } else {
-                data.home.fixedExpenses.push({ id: Store.genId(), name, amount, category, frequency, chargeDate, active: true });
+                data.home.fixedExpenses.push({ id: Store.genId(), name, amount, category, frequency, chargeDate, active: true, paymentMethod, creditCardId, totalPayments, paymentsMade });
             }
         });
         closeModal();
@@ -261,18 +299,26 @@ const HomeCashflow = {
         const item = data.home.fixedExpenses.find(e => e.id === id);
         if (!item) return;
         const cats = data.categories.home;
+        const pmFields = this._paymentMethodFields(item.paymentMethod, item.creditCardId);
         openModal('עריכת הוצאה קבועה', `
             <div class="form-group"><label>שם</label><input type="text" id="fix-name" value="${item.name}"></div>
             <div class="form-row">
                 <div class="form-group"><label>סכום</label><input type="number" id="fix-amount" value="${item.amount}"></div>
                 <div class="form-group"><label>קטגוריה</label><select id="fix-category">${cats.map(c=>`<option value="${c}" ${c===item.category?'selected':''}>${c}</option>`).join('')}</select></div>
             </div>
-            <div class="form-row">
-                <div class="form-group"><label>תדירות</label><select id="fix-freq"><option value="monthly" ${item.frequency==='monthly'?'selected':''}>חודשי</option><option value="bimonthly" ${item.frequency==='bimonthly'?'selected':''}>דו-חודשי</option><option value="quarterly" ${item.frequency==='quarterly'?'selected':''}>רבעוני</option><option value="yearly" ${item.frequency==='yearly'?'selected':''}>שנתי</option></select></div>
-                <div class="form-group"><label>יום חיוב בחודש</label><input type="number" id="fix-date" min="1" max="31" value="${item.chargeDate}"></div>
-            </div>
+            <div class="form-group"><label>תדירות</label><select id="fix-freq"><option value="monthly" ${item.frequency==='monthly'?'selected':''}>חודשי</option><option value="bimonthly" ${item.frequency==='bimonthly'?'selected':''}>דו-חודשי</option><option value="quarterly" ${item.frequency==='quarterly'?'selected':''}>רבעוני</option><option value="yearly" ${item.frequency==='yearly'?'selected':''}>שנתי</option></select></div>
+            ${pmFields}
             <div class="modal-actions"><button class="btn btn-primary" onclick="HomeCashflow.saveFixed('${id}')">עדכן</button><button class="btn btn-ghost" onclick="closeModal()">ביטול</button></div>
         `);
+        // Set values after modal renders
+        setTimeout(() => {
+            const dateEl = document.getElementById('fix-date');
+            const tpEl = document.getElementById('fix-total-payments');
+            const pmEl = document.getElementById('fix-payments-made');
+            if (dateEl) dateEl.value = item.chargeDate;
+            if (tpEl) tpEl.value = item.totalPayments || 0;
+            if (pmEl) pmEl.value = item.paymentsMade || 0;
+        }, 10);
     },
 
     toggleFixed(id) {

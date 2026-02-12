@@ -3,6 +3,9 @@ const DailyView = {
     currentMonth: null,
     currentYear: null,
     activeAccount: 'home', // 'home' or 'business'
+    // Anchor month: the month where we know the real balance from the bank
+    _anchorYear: 2026,
+    _anchorMonth: 1, // February (0-indexed)
 
     init() {
         const now = new Date();
@@ -18,13 +21,14 @@ const DailyView = {
         const isCurrentMonth = today.getMonth() === this.currentMonth && today.getFullYear() === this.currentYear;
         const todayDate = today.getDate();
 
+        // Calculate dynamic opening balance
+        const openHome = this._calculateOpeningBalance(data, 'home', this.currentYear, this.currentMonth);
+        const openBiz = this._calculateOpeningBalance(data, 'business', this.currentYear, this.currentMonth);
+
         // Build daily entries
         const days = [];
-        let runningHome = data.home.balance;
-        let runningBiz = data.business.balance;
-
-        // If viewing a future/past month, we'd need to adjust opening balances
-        // For now, use stored balances as opening for current month
+        let runningHome = openHome;
+        let runningBiz = openBiz;
 
         for (let day = 1; day <= daysInMonth; day++) {
             const dateStr = `${this.currentYear}-${String(this.currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
@@ -55,6 +59,7 @@ const DailyView = {
         }
 
         const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+        const openingBal = this.activeAccount === 'business' ? openBiz : openHome;
 
         return `
             <div class="daily-view-header">
@@ -72,7 +77,7 @@ const DailyView = {
             <div class="daily-summary-bar">
                 <div class="daily-summary-item">
                     <span class="daily-summary-label">יתרת פתיחה</span>
-                    <span class="daily-summary-value ${this._balanceClass(this._getOpeningBalance())}">${formatCurrency(this._getOpeningBalance())}</span>
+                    <span class="daily-summary-value ${this._balanceClass(openingBal)}">${formatCurrency(openingBal)}</span>
                 </div>
                 <div class="daily-summary-item">
                     <span class="daily-summary-label">סה"כ הכנסות</span>
@@ -120,7 +125,8 @@ const DailyView = {
                                         <span class="entry-name">${e.name}</span>
                                         <span class="entry-amount ${e.type === 'income' ? 'amount-positive' : 'amount-negative'}">${e.type === 'income' ? '+' : '-'}${formatCurrency(e.amount)}</span>
                                         <span class="entry-source badge badge-${e.account === 'home' ? 'green' : 'blue'}">${e.account === 'home' ? 'בית' : 'עסק'}</span>
-                                        ${e.editable ? `<button class="btn-inline-edit" onclick="DailyView.editEntry('${e.sourceType}', '${e.sourceId}', '${e.account}')" title="עריכה">✏️</button>` : ''}
+                                        <button class="btn-inline-edit" onclick="DailyView.editEntry('${e.sourceType}', '${e.sourceId}', '${e.account}')" title="עריכה">✏️</button>
+                                        <button class="btn-inline-edit" onclick="DailyView.deleteEntry('${e.sourceType}', '${e.sourceId}', '${e.account}')" title="מחיקה">🗑️</button>
                                     </div>
                                 `).join('')}
                                 <button class="btn-add-entry" onclick="DailyView.openAddEntry('${d.dateStr}', ${d.day})">+ הוסף</button>
@@ -132,10 +138,54 @@ const DailyView = {
         `;
     },
 
-    _getOpeningBalance() {
-        const data = Store.get();
-        if (this.activeAccount === 'business') return data.business.balance;
-        return data.home.balance;
+    // ===== DYNAMIC OPENING BALANCE =====
+    // Calculates the opening balance for any month by summing forward from the anchor month
+    _calculateOpeningBalance(data, account, targetYear, targetMonth) {
+        const anchorBalance = account === 'business' ? data.business.balance : data.home.balance;
+        const anchorYM = this._anchorYear * 12 + this._anchorMonth;
+        const targetYM = targetYear * 12 + targetMonth;
+
+        if (targetYM === anchorYM) return anchorBalance;
+
+        // Calculate sum of all transactions for each month between anchor and target
+        let balance = anchorBalance;
+
+        if (targetYM > anchorYM) {
+            // Forward: sum months from anchor to target-1
+            for (let ym = anchorYM; ym < targetYM; ym++) {
+                const y = Math.floor(ym / 12);
+                const m = ym % 12;
+                balance += this._getMonthNet(data, account, y, m);
+            }
+        } else {
+            // Backward: subtract months from target to anchor-1
+            for (let ym = targetYM; ym < anchorYM; ym++) {
+                const y = Math.floor(ym / 12);
+                const m = ym % 12;
+                balance -= this._getMonthNet(data, account, y, m);
+            }
+        }
+
+        return balance;
+    },
+
+    // Calculate net income-expenses for a full month for one account
+    _getMonthNet(data, account, year, month) {
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        let totalIncome = 0;
+        let totalExpense = 0;
+
+        for (let day = 1; day <= daysInMonth; day++) {
+            const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+            const entries = this._getEntriesForDay(data, day, dateStr, year, month);
+
+            entries.filter(e => e.account === account).forEach(e => {
+                if (e.type === 'income') totalIncome += e.amount;
+                else totalExpense += e.amount;
+            });
+        }
+
+        return totalIncome - totalExpense;
     },
 
     _balanceKey() {
@@ -151,20 +201,31 @@ const DailyView = {
         return entries.filter(e => e.account === this.activeAccount);
     },
 
-    _getEntriesForDay(data, dayOfMonth, dateStr) {
+    _getEntriesForDay(data, dayOfMonth, dateStr, overrideYear, overrideMonth) {
         const entries = [];
+        const viewYear = overrideYear !== undefined ? overrideYear : this.currentYear;
+        const viewMonth = overrideMonth !== undefined ? overrideMonth : this.currentMonth;
 
         // --- HOME ---
-        // Home incomes by date
+        // Home incomes by date (one-time: exact match; monthly: day match in any month)
         data.home.incomes.forEach(inc => {
-            if (this._dateMatchesDay(inc.date, dateStr)) {
-                entries.push({ name: inc.name, amount: inc.amount, type: 'income', account: 'home', icon: '💰', sourceType: 'home-income', sourceId: inc.id, editable: true });
+            if (inc.type === 'monthly') {
+                // Monthly income: match by day of month
+                const incDate = new Date(inc.date);
+                if (incDate.getDate() === dayOfMonth) {
+                    entries.push({ name: inc.name, amount: inc.amount, type: 'income', account: 'home', icon: '💰', sourceType: 'home-income', sourceId: inc.id, editable: true });
+                }
+            } else {
+                // One-time: exact date match
+                if (this._dateMatchesDay(inc.date, dateStr)) {
+                    entries.push({ name: inc.name, amount: inc.amount, type: 'income', account: 'home', icon: '💰', sourceType: 'home-income', sourceId: inc.id, editable: true });
+                }
             }
         });
 
         // Home fixed expenses by chargeDate
         data.home.fixedExpenses.filter(e => e.active).forEach(e => {
-            if (e.chargeDate === dayOfMonth && this._frequencyApplies(e.frequency, this.currentMonth)) {
+            if (e.chargeDate === dayOfMonth && this._frequencyApplies(e.frequency, viewMonth)) {
                 entries.push({ name: e.name, amount: e.amount, type: 'expense', account: 'home', icon: '📋', sourceType: 'home-fixed', sourceId: e.id, editable: true });
             }
         });
@@ -187,7 +248,7 @@ const DailyView = {
 
         // Business fixed expenses by chargeDate
         data.business.fixedExpenses.filter(e => e.active).forEach(e => {
-            if (e.chargeDate === dayOfMonth && this._frequencyApplies(e.frequency, this.currentMonth)) {
+            if (e.chargeDate === dayOfMonth && this._frequencyApplies(e.frequency, viewMonth)) {
                 entries.push({ name: e.name, amount: e.amount, type: 'expense', account: 'business', icon: '📋', sourceType: 'biz-fixed', sourceId: e.id, editable: true });
             }
         });
@@ -209,23 +270,36 @@ const DailyView = {
         // Transfer sync: business transfers also appear as home income
         data.business.transfers.forEach(t => {
             if (this._dateMatchesDay(t.date, dateStr)) {
-                entries.push({ name: 'העברה מעסק' + (t.notes ? ` (${t.notes})` : ''), amount: t.amount, type: 'income', account: 'home', icon: '↔️', sourceType: 'biz-transfer', sourceId: t.id, editable: false });
+                entries.push({ name: 'העברה מעסק' + (t.notes ? ` (${t.notes})` : ''), amount: t.amount, type: 'income', account: 'home', icon: '↔️', sourceType: 'biz-transfer-home', sourceId: t.id, editable: false });
             }
         });
 
-        // --- LOANS ---
+        // --- LOANS (with startDate check) ---
         (data.loans || []).filter(l => l.active && (l.totalInstallments - l.installmentsPaid) > 0).forEach(loan => {
+            // Check if loan has started
+            if (loan.startDate) {
+                const startDate = new Date(loan.startDate);
+                const viewDate = new Date(viewYear, viewMonth, dayOfMonth);
+                if (viewDate < startDate) return; // Loan hasn't started yet
+            }
             if (loan.chargeDate === dayOfMonth) {
-                entries.push({ name: loan.name, amount: loan.monthlyPayment, type: 'expense', account: loan.account, icon: '🏦', sourceType: 'loan', sourceId: loan.id, editable: false });
+                entries.push({ name: loan.name, amount: loan.monthlyPayment, type: 'expense', account: loan.account, icon: '🏦', sourceType: 'loan', sourceId: loan.id, editable: true });
             }
         });
 
-        // --- CREDIT CARDS ---
+        // --- EMPLOYEES / FREELANCERS ---
+        (data.employees || []).filter(e => e.active).forEach(emp => {
+            if (emp.paymentDate === dayOfMonth) {
+                entries.push({ name: emp.name, amount: emp.grossSalary, type: 'expense', account: 'business', icon: '👤', sourceType: 'employee', sourceId: emp.id, editable: true });
+            }
+        });
+
+        // --- CREDIT CARDS (billing cycle aware) ---
         data.creditCards.forEach(card => {
             if (card.billingDate === dayOfMonth) {
-                const monthlyCharge = getMonthlyCardCharges(card);
+                const monthlyCharge = getCardChargesForMonth(card, viewYear, viewMonth);
                 if (monthlyCharge > 0) {
-                    entries.push({ name: card.name, amount: monthlyCharge, type: 'expense', account: card.account, icon: '💳', sourceType: 'credit-card', sourceId: card.id, editable: false });
+                    entries.push({ name: card.name, amount: monthlyCharge, type: 'expense', account: card.account, icon: '💳', sourceType: 'credit-card', sourceId: card.id, editable: true });
                 }
             }
         });
@@ -239,8 +313,6 @@ const DailyView = {
     },
 
     _frequencyApplies(frequency, month) {
-        // For simplicity, monthly always applies
-        // bimonthly: even months, quarterly: every 3, yearly: january
         if (frequency === 'monthly') return true;
         if (frequency === 'bimonthly') return month % 2 === 0;
         if (frequency === 'quarterly') return month % 3 === 0;
@@ -332,14 +404,12 @@ const DailyView = {
         const catSelect = document.getElementById('de-category');
         const cats = Store.get().categories;
 
-        // Update categories
         if (type.startsWith('home')) {
             catSelect.innerHTML = cats.home.map(c => `<option value="${c}">${c}</option>`).join('');
         } else {
             catSelect.innerHTML = cats.business.map(c => `<option value="${c}">${c}</option>`).join('');
         }
 
-        // Show/hide fields
         statusGroup.style.display = type === 'biz-income' ? 'block' : 'none';
         notesGroup.style.display = (type === 'biz-income' || type === 'biz-transfer') ? 'block' : 'none';
         catGroup.style.display = type === 'biz-transfer' ? 'none' : 'block';
@@ -388,7 +458,65 @@ const DailyView = {
             case 'biz-income': BusinessCashflow.editClient(sourceId); break;
             case 'biz-fixed': BusinessCashflow.editFixed(sourceId); break;
             case 'biz-variable': BusinessCashflow.editVariable(sourceId); break;
+            case 'biz-transfer': BusinessCashflow.editTransfer(sourceId); break;
+            case 'loan': {
+                const loanData = Store.get().loans.find(l => l.id === sourceId);
+                if (loanData && typeof Loans !== 'undefined' && Loans.editLoan) {
+                    Loans.editLoan(sourceId);
+                } else {
+                    App.navigate('loans');
+                }
+                break;
+            }
+            case 'employee': Salaries.editEmployee(sourceId); break;
+            case 'credit-card': App.navigate('credit-cards'); break;
         }
+    },
+
+    // --- Delete Entry ---
+    deleteEntry(sourceType, sourceId, account) {
+        if (!confirmAction('למחוק רשומה זו?')) return;
+
+        Store.update(data => {
+            switch (sourceType) {
+                case 'home-income':
+                    data.home.incomes = data.home.incomes.filter(i => i.id !== sourceId);
+                    break;
+                case 'home-fixed':
+                    data.home.fixedExpenses = data.home.fixedExpenses.filter(e => e.id !== sourceId);
+                    break;
+                case 'home-variable':
+                    data.home.variableExpenses = data.home.variableExpenses.filter(e => e.id !== sourceId);
+                    break;
+                case 'biz-income':
+                    data.business.incomes = data.business.incomes.filter(i => i.id !== sourceId);
+                    break;
+                case 'biz-fixed':
+                    data.business.fixedExpenses = data.business.fixedExpenses.filter(e => e.id !== sourceId);
+                    break;
+                case 'biz-variable':
+                    data.business.variableExpenses = data.business.variableExpenses.filter(e => e.id !== sourceId);
+                    break;
+                case 'biz-transfer':
+                    data.business.transfers = data.business.transfers.filter(t => t.id !== sourceId);
+                    break;
+                case 'biz-transfer-home':
+                    // Delete from business transfers (affects both sides)
+                    data.business.transfers = data.business.transfers.filter(t => t.id !== sourceId);
+                    break;
+                case 'loan':
+                    data.loans = (data.loans || []).filter(l => l.id !== sourceId);
+                    break;
+                case 'employee':
+                    data.employees = data.employees.filter(e => e.id !== sourceId);
+                    break;
+                case 'credit-card':
+                    // Don't delete the card - navigate to credit cards page
+                    showToast('למחיקת כרטיס אשראי, עבור לעמוד כרטיסי אשראי', 'info');
+                    return;
+            }
+        });
+        showToast('נמחק בהצלחה', 'success');
     },
 
     afterRender() {

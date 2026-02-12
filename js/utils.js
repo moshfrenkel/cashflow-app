@@ -78,13 +78,42 @@ function getMonthlyFixedTotal(expenses) {
     }, 0);
 }
 
-// Get current month's credit card charges
-function getMonthlyCardCharges(card) {
+// Get credit card charges for a specific billing month
+// Billing cycle: charges with startDate in this card's billing period
+// One-time (installments=1): only in the billing month matching startDate
+// Installments (installments>1): every month until paid off
+function getCardChargesForMonth(card, year, month) {
+    const billingDate = card.billingDate;
     return card.charges.reduce((sum, ch) => {
         const remaining = ch.installments - ch.installmentsPaid;
-        if (remaining > 0) return sum + ch.monthlyAmount;
-        return sum;
+        if (remaining <= 0) return sum;
+
+        if (ch.installments === 1) {
+            // One-time charge: only show in the billing month of its startDate
+            if (!ch.startDate) return sum;
+            const sd = new Date(ch.startDate);
+            if (sd.getMonth() === month && sd.getFullYear() === year) {
+                return sum + ch.monthlyAmount;
+            }
+            return sum;
+        } else {
+            // Installment charge: show every month from startDate until paid off
+            if (!ch.startDate) return sum + ch.monthlyAmount; // fallback: always show
+            const sd = new Date(ch.startDate);
+            const startYM = sd.getFullYear() * 12 + sd.getMonth();
+            const currentYM = year * 12 + month;
+            if (currentYM >= startYM) {
+                return sum + ch.monthlyAmount;
+            }
+            return sum;
+        }
     }, 0);
+}
+
+// Backward-compatible wrapper (uses current month)
+function getMonthlyCardCharges(card) {
+    const now = new Date();
+    return getCardChargesForMonth(card, now.getFullYear(), now.getMonth());
 }
 
 // Get total credit usage for a card
@@ -95,12 +124,18 @@ function getCardUsage(card) {
     }, 0);
 }
 
-// Get all active monthly charges across all cards for an account
-function getTotalCardCharges(account) {
+// Get all active monthly charges across all cards for an account (for a specific month)
+function getTotalCardChargesForMonth(account, year, month) {
     const data = Store.get();
     return data.creditCards
         .filter(c => c.account === account)
-        .reduce((sum, card) => sum + getMonthlyCardCharges(card), 0);
+        .reduce((sum, card) => sum + getCardChargesForMonth(card, year, month), 0);
+}
+
+// Backward-compatible wrapper
+function getTotalCardCharges(account) {
+    const now = new Date();
+    return getTotalCardChargesForMonth(account, now.getFullYear(), now.getMonth());
 }
 
 // Calculate employer cost - disabled (freelancers, no employer costs)
@@ -139,6 +174,10 @@ function getForecastData(months = 6) {
     const result = [];
     const now = new Date();
 
+    // Calculate average business income from received payments (for future months)
+    const receivedIncomes = data.business.incomes.filter(inc => inc.status === 'received');
+    const avgBizIncome = receivedIncomes.length > 0 ? sumBy(receivedIncomes, 'amount') / Math.max(1, receivedIncomes.length) * receivedIncomes.length : 0;
+
     for (let i = 0; i < months; i++) {
         const m = (now.getMonth() + i) % 12;
         const y = now.getFullYear() + Math.floor((now.getMonth() + i) / 12);
@@ -146,29 +185,43 @@ function getForecastData(months = 6) {
         // Home
         const homeIncome = sumBy(data.home.incomes.filter(inc => inc.type === 'monthly'), 'amount');
         const homeFixed = getMonthlyFixedTotal(data.home.fixedExpenses);
-        const homeCards = data.creditCards.filter(c => c.account === 'home').reduce((s, c) => s + getMonthlyCardCharges(c), 0);
+        const homeCards = getTotalCardChargesForMonth('home', y, m);
+        const homeLoans = (data.loans || []).filter(l => l.active && l.account === 'home' && (l.totalInstallments - l.installmentsPaid) > 0)
+            .filter(l => !l.startDate || new Date(l.startDate) <= new Date(y, m + 1, 0))
+            .reduce((s, l) => s + l.monthlyPayment, 0);
 
         // Business
-        const bizFixedIncome = data.business.incomes
+        const bizMonthIncome = data.business.incomes
             .filter(inc => {
                 const d = new Date(inc.expectedDate);
                 return d.getMonth() === m && d.getFullYear() === y;
             })
             .reduce((s, inc) => s + inc.amount, 0);
         const bizFixed = getMonthlyFixedTotal(data.business.fixedExpenses);
-        const bizCards = data.creditCards.filter(c => c.account === 'business').reduce((s, c) => s + getMonthlyCardCharges(c), 0);
+        const bizCards = getTotalCardChargesForMonth('business', y, m);
         const salaries = getTotalSalaryCost();
+        const bizLoans = (data.loans || []).filter(l => l.active && l.account === 'business' && (l.totalInstallments - l.installmentsPaid) > 0)
+            .filter(l => !l.startDate || new Date(l.startDate) <= new Date(y, m + 1, 0))
+            .reduce((s, l) => s + l.monthlyPayment, 0);
+        const transfers = sumBy(data.business.transfers.filter(t => {
+            const d = new Date(t.date); return d.getMonth() === m && d.getFullYear() === y;
+        }), 'amount');
+
+        const totalExpHome = homeFixed + homeCards + homeLoans;
+        const totalExpBiz = bizFixed + bizCards + salaries + bizLoans + transfers;
+        // For future months with no specific income, use average
+        const bizIncome = bizMonthIncome > 0 ? bizMonthIncome : (i === 0 ? bizMonthIncome : avgBizIncome);
 
         result.push({
             month: m,
             year: y,
             label: getMonthName(m),
             homeIncome,
-            homeExpenses: homeFixed + homeCards,
-            homeNet: homeIncome - homeFixed - homeCards,
-            bizIncome: bizFixedIncome || sumBy(data.business.incomes.filter(inc => inc.status === 'received'), 'amount') / Math.max(1, i + 1),
-            bizExpenses: bizFixed + bizCards + salaries,
-            bizNet: (bizFixedIncome || 0) - bizFixed - bizCards - salaries
+            homeExpenses: totalExpHome,
+            homeNet: homeIncome - totalExpHome,
+            bizIncome,
+            bizExpenses: totalExpBiz,
+            bizNet: bizIncome - totalExpBiz
         });
     }
     return result;

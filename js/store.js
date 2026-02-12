@@ -394,11 +394,10 @@ const Store = {
         ];
 
         // --- Home Fixed Expenses (via bank, not credit card) ---
+        // NOTE: Loans removed from here - they are in loans[] and daily-view reads both
         data.home.fixedExpenses = [
             { id: this.genId(), name: 'שכר דירה', amount: 6400, category: 'קבועות', frequency: 'monthly', chargeDate: 10, active: true, paymentMethod: 'check', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
             { id: this.genId(), name: 'ועד בית', amount: 250, category: 'קבועות', frequency: 'monthly', chargeDate: 10, active: true, paymentMethod: 'check', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
-            { id: this.genId(), name: 'הלוואה 302 בינלאומי', amount: 1777.16, category: 'קבועות', frequency: 'monthly', chargeDate: 17, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 120, paymentsMade: 22 },
-            { id: this.genId(), name: 'הלוואה 493 בינלאומי', amount: 1014.09, category: 'קבועות', frequency: 'monthly', chargeDate: 21, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 60, paymentsMade: 3 },
             { id: this.genId(), name: 'עמלת פעולות בנק', amount: 23, category: 'שונות', frequency: 'monthly', chargeDate: 30, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 0, paymentsMade: 0 }
         ];
 
@@ -418,8 +417,8 @@ const Store = {
         ];
 
         // --- Business Fixed Expenses (via bank) ---
+        // NOTE: Hapoalim loan removed from here - it's in loans[]
         data.business.fixedExpenses = [
-            { id: this.genId(), name: 'הלוואה הפועלים', amount: 4029.18, category: 'קבועות', frequency: 'monthly', chargeDate: 8, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 84, paymentsMade: 6 },
             { id: this.genId(), name: 'רו"ח קובי הוכמן', amount: 590, category: 'קבועות', frequency: 'monthly', chargeDate: 7, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
             { id: this.genId(), name: 'עמלת מסלול פועלים', amount: 22, category: 'שונות', frequency: 'monthly', chargeDate: 1, active: true, paymentMethod: 'bank', creditCardId: '', totalPayments: 0, paymentsMade: 0 },
             // Credit card standing orders (הו"ק)
@@ -453,8 +452,8 @@ const Store = {
             {
                 id: this.genId(), name: 'ישרכרט 1899', account: 'home', limit: 5000, billingDate: 15,
                 charges: [
-                    // All one-time charges for current billing cycle (6,286.75 total)
-                    // No installment charges on this card
+                    // One-time charges for Feb 2026 billing cycle (total 6,286.75)
+                    { id: this.genId(), description: 'חיובים שוטפים ישרכרט פברואר', totalAmount: 6286.75, installments: 1, installmentsPaid: 0, startDate: '2026-02-15', monthlyAmount: 6286.75 }
                 ]
             },
             {

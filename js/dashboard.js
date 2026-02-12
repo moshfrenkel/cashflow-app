@@ -7,43 +7,56 @@ const Dashboard = {
         const data = Store.get();
         const isHome = this.activeAccount === 'home';
 
+        const now = new Date();
+        const curMonth = now.getMonth();
+        const curYear = now.getFullYear();
+
         // Home calculations
-        const homeIncome = sumBy(data.home.incomes.filter(i => i.type === 'monthly'), 'amount');
+        const homeMonthlyIncome = sumBy(data.home.incomes.filter(i => i.type === 'monthly'), 'amount');
+        const homeOneTimeIncome = sumBy(data.home.incomes.filter(i => {
+            if (i.type === 'monthly') return false;
+            const d = new Date(i.date);
+            return d.getMonth() === curMonth && d.getFullYear() === curYear;
+        }), 'amount');
+        const homeIncome = homeMonthlyIncome + homeOneTimeIncome;
         const homeFixed = getMonthlyFixedTotal(data.home.fixedExpenses);
-        const homeCards = getTotalCardCharges('home');
+        const homeCards = getTotalCardChargesForMonth('home', curYear, curMonth);
         const homeVar = sumBy(data.home.variableExpenses.filter(e => {
-            const d = new Date(e.date); const n = new Date();
-            return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+            const d = new Date(e.date);
+            return d.getMonth() === curMonth && d.getFullYear() === curYear;
         }), 'amount');
         const homeTransfersIn = sumBy(data.business.transfers.filter(t => {
-            const d = new Date(t.date); const n = new Date();
-            return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+            const d = new Date(t.date);
+            return d.getMonth() === curMonth && d.getFullYear() === curYear;
         }), 'amount');
-        const totalExpHome = homeFixed + homeCards + homeVar;
+
+        // Loans per account (with startDate check)
+        const homeLoans = (data.loans || []).filter(l => l.active && l.account === 'home' && (l.totalInstallments - l.installmentsPaid) > 0)
+            .filter(l => !l.startDate || new Date(l.startDate) <= new Date(curYear, curMonth + 1, 0));
+        const bizLoans = (data.loans || []).filter(l => l.active && l.account === 'business' && (l.totalInstallments - l.installmentsPaid) > 0)
+            .filter(l => !l.startDate || new Date(l.startDate) <= new Date(curYear, curMonth + 1, 0));
+        const homeLoansMonthly = homeLoans.reduce((s, l) => s + l.monthlyPayment, 0);
+        const bizLoansMonthly = bizLoans.reduce((s, l) => s + l.monthlyPayment, 0);
+
+        const totalExpHome = homeFixed + homeCards + homeVar + homeLoansMonthly;
         const homeNetMonthly = homeIncome + homeTransfersIn - totalExpHome;
 
         // Business calculations
         const bizReceived = sumBy(data.business.incomes.filter(i => i.status === 'received'), 'amount');
         const bizExpected = sumBy(data.business.incomes.filter(i => i.status === 'expected'), 'amount');
         const bizFixed = getMonthlyFixedTotal(data.business.fixedExpenses);
-        const bizCards = getTotalCardCharges('business');
+        const bizCards = getTotalCardChargesForMonth('business', curYear, curMonth);
         const bizVar = sumBy(data.business.variableExpenses.filter(e => {
-            const d = new Date(e.date); const n = new Date();
-            return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+            const d = new Date(e.date);
+            return d.getMonth() === curMonth && d.getFullYear() === curYear;
         }), 'amount');
         const salaryTotal = getTotalSalaryCost();
         const bizTransfersOut = sumBy(data.business.transfers.filter(t => {
-            const d = new Date(t.date); const n = new Date();
-            return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+            const d = new Date(t.date);
+            return d.getMonth() === curMonth && d.getFullYear() === curYear;
         }), 'amount');
-        const totalExpBiz = bizFixed + bizCards + bizVar + salaryTotal + bizTransfersOut;
+        const totalExpBiz = bizFixed + bizCards + bizVar + salaryTotal + bizTransfersOut + bizLoansMonthly;
         const bizNetMonthly = bizReceived - totalExpBiz;
-
-        // Loans per account
-        const homeLoans = (data.loans || []).filter(l => l.active && l.account === 'home');
-        const bizLoans = (data.loans || []).filter(l => l.active && l.account === 'business');
-        const homeLoansMonthly = homeLoans.reduce((s, l) => s + (l.totalInstallments - l.installmentsPaid > 0 ? l.monthlyPayment : 0), 0);
-        const bizLoansMonthly = bizLoans.reduce((s, l) => s + (l.totalInstallments - l.installmentsPaid > 0 ? l.monthlyPayment : 0), 0);
 
         // Credit framework
         const creditFramework = data.settings.creditFramework || { home: 0, business: 0 };
@@ -194,12 +207,12 @@ const Dashboard = {
                 <div class="summary-card red">
                     <div class="label">הוצאות החודש</div>
                     <div class="value negative">${formatCurrency(fixed + cards + variable + loansMonthly)}</div>
-                    <div class="sub">קבועות: ${formatCurrency(fixed)} | כרטיסים: ${formatCurrency(cards)}</div>
+                    <div class="sub">קבועות: ${formatCurrency(fixed)} | כרטיסים: ${formatCurrency(cards)}${loansMonthly > 0 ? ' | הלוואות: ' + formatCurrency(loansMonthly) : ''}</div>
                 </div>
                 <div class="summary-card ${netMonthly >= 0 ? 'green' : 'red'}">
                     <div class="label">נטו חודשי</div>
                     <div class="value ${netMonthly >= 0 ? 'positive' : 'negative'}">${formatCurrency(netMonthly)}</div>
-                    <div class="sub">${loansMonthly > 0 ? 'הלוואות: ' + formatCurrency(loansMonthly) : ''}</div>
+                    <div class="sub">הכנסות: ${formatCurrency(income)}${transfersIn > 0 ? ' + העברות: ' + formatCurrency(transfersIn) : ''}</div>
                 </div>
             </div>`;
     },
@@ -220,7 +233,7 @@ const Dashboard = {
                 <div class="summary-card red">
                     <div class="label">הוצאות החודש</div>
                     <div class="value negative">${formatCurrency(fixed + cards + variable + salaries + loansMonthly)}</div>
-                    <div class="sub">קבועות: ${formatCurrency(fixed)} | שכר: ${formatCurrency(salaries)}</div>
+                    <div class="sub">קבועות: ${formatCurrency(fixed)} | שכר: ${formatCurrency(salaries)}${loansMonthly > 0 ? ' | הלוואות: ' + formatCurrency(loansMonthly) : ''}</div>
                 </div>
                 <div class="summary-card ${netMonthly >= 0 ? 'green' : 'red'}">
                     <div class="label">נטו חודשי</div>
@@ -304,31 +317,41 @@ const Dashboard = {
 
         let labels, values, colors;
 
+        const n = new Date();
+        const cm = n.getMonth();
+        const cy = n.getFullYear();
+
         if (isHome) {
             const fixed = getMonthlyFixedTotal(data.home.fixedExpenses);
-            const cards = getTotalCardCharges('home');
+            const cards = getTotalCardChargesForMonth('home', cy, cm);
             const variable = sumBy(data.home.variableExpenses.filter(e => {
-                const d = new Date(e.date); const n = new Date();
-                return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+                const d = new Date(e.date);
+                return d.getMonth() === cm && d.getFullYear() === cy;
             }), 'amount');
-            labels = ['הוצאות קבועות', 'כרטיסי אשראי', 'הוצאות משתנות'];
-            values = [fixed, cards, variable];
-            colors = ['#ef4444', '#a855f7', '#f59e0b'];
+            const loans = (data.loans || []).filter(l => l.active && l.account === 'home' && (l.totalInstallments - l.installmentsPaid) > 0)
+                .filter(l => !l.startDate || new Date(l.startDate) <= new Date(cy, cm + 1, 0))
+                .reduce((s, l) => s + l.monthlyPayment, 0);
+            labels = ['הוצאות קבועות', 'כרטיסי אשראי', 'הוצאות משתנות', 'הלוואות'];
+            values = [fixed, cards, variable, loans];
+            colors = ['#ef4444', '#a855f7', '#f59e0b', '#6366f1'];
         } else {
             const fixed = getMonthlyFixedTotal(data.business.fixedExpenses);
-            const cards = getTotalCardCharges('business');
+            const cards = getTotalCardChargesForMonth('business', cy, cm);
             const salaries = getTotalSalaryCost();
             const variable = sumBy(data.business.variableExpenses.filter(e => {
-                const d = new Date(e.date); const n = new Date();
-                return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+                const d = new Date(e.date);
+                return d.getMonth() === cm && d.getFullYear() === cy;
             }), 'amount');
             const transfers = sumBy(data.business.transfers.filter(t => {
-                const d = new Date(t.date); const n = new Date();
-                return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+                const d = new Date(t.date);
+                return d.getMonth() === cm && d.getFullYear() === cy;
             }), 'amount');
-            labels = ['הוצאות קבועות', 'כרטיסי אשראי', 'שכר צוות', 'הוצאות משתנות', 'העברות לבית'];
-            values = [fixed, cards, salaries, variable, transfers];
-            colors = ['#ef4444', '#a855f7', '#3b82f6', '#f59e0b', '#8b5cf6'];
+            const loans = (data.loans || []).filter(l => l.active && l.account === 'business' && (l.totalInstallments - l.installmentsPaid) > 0)
+                .filter(l => !l.startDate || new Date(l.startDate) <= new Date(cy, cm + 1, 0))
+                .reduce((s, l) => s + l.monthlyPayment, 0);
+            labels = ['הוצאות קבועות', 'כרטיסי אשראי', 'שכר צוות', 'הוצאות משתנות', 'העברות לבית', 'הלוואות'];
+            values = [fixed, cards, salaries, variable, transfers, loans];
+            colors = ['#ef4444', '#a855f7', '#3b82f6', '#f59e0b', '#8b5cf6', '#6366f1'];
         }
 
         this.charts.expenseBreakdown = new Chart(canvas, {

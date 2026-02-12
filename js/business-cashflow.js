@@ -177,7 +177,7 @@ const BusinessCashflow = {
                     <thead><tr><th>סכום</th><th>תאריך</th><th>הערות</th><th>פעולות</th></tr></thead>
                     <tbody>${data.business.transfers.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(t => `
                         <tr><td class="amount-negative">${formatCurrency(t.amount)}</td><td>${formatDate(t.date)}</td><td style="color:var(--text-muted)">${t.notes||''}</td>
-                        <td><button class="btn-icon danger" onclick="BusinessCashflow.deleteTransfer('${t.id}')">🗑️</button></td></tr>
+                        <td><button class="btn-icon" onclick="BusinessCashflow.editTransfer('${t.id}')">✏️</button><button class="btn-icon danger" onclick="BusinessCashflow.deleteTransfer('${t.id}')">🗑️</button></td></tr>
                     `).join('')}</tbody>
                     <tfoot><tr><td class="amount-negative"><strong>${formatCurrency(sumBy(data.business.transfers,'amount'))}</strong></td><td colspan="3"><strong>סה"כ</strong></td></tr></tfoot>
                 </table></div></div>`
@@ -401,15 +401,31 @@ const BusinessCashflow = {
         `);
     },
 
-    saveTransfer() {
+    saveTransfer(editId) {
         const amount = parseFloat(document.getElementById('tr-amount').value);
         const date = document.getElementById('tr-date').value;
         const notes = document.getElementById('tr-notes').value.trim();
         if (!amount) { showToast('נא למלא סכום', 'error'); return; }
         Store.update(data => {
-            data.business.transfers.push({ id: Store.genId(), amount, date, notes });
+            if (editId) {
+                const item = data.business.transfers.find(t => t.id === editId);
+                if (item) Object.assign(item, { amount, date, notes });
+            } else {
+                data.business.transfers.push({ id: Store.genId(), amount, date, notes });
+            }
         });
-        closeModal(); showToast('העברה נוספה', 'success');
+        closeModal(); showToast(editId ? 'העברה עודכנה' : 'העברה נוספה', 'success');
+    },
+
+    editTransfer(id) {
+        const item = Store.get().business.transfers.find(t => t.id === id);
+        if (!item) return;
+        openModal('עריכת העברה', `
+            <div class="form-group"><label>סכום</label><input type="number" id="tr-amount" value="${item.amount}"></div>
+            <div class="form-group"><label>תאריך</label><input type="date" id="tr-date" value="${item.date}"></div>
+            <div class="form-group"><label>הערות</label><input type="text" id="tr-notes" value="${item.notes || ''}"></div>
+            <div class="modal-actions"><button class="btn btn-primary" onclick="BusinessCashflow.saveTransfer('${id}')">עדכן</button><button class="btn btn-ghost" onclick="closeModal()">ביטול</button></div>
+        `);
     },
 
     deleteTransfer(id) {

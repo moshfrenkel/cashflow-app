@@ -66,6 +66,7 @@ const CreditCards = {
                                             <td>${remaining <= 0 ? '<span class="badge badge-green">הסתיים</span>' : `<span class="badge badge-yellow">${remaining} נותרו</span>`}</td>
                                             <td>
                                                 ${remaining > 0 ? `<button class="btn btn-sm btn-ghost" onclick="CreditCards.payInstallment('${card.id}','${ch.id}')">שולם</button>` : ''}
+                                                <button class="btn-icon" onclick="CreditCards.editCharge('${card.id}','${ch.id}')">✏️</button>
                                                 <button class="btn-icon danger" onclick="CreditCards.deleteCharge('${card.id}','${ch.id}')">🗑️</button>
                                             </td>
                                         </tr>`;
@@ -138,7 +139,7 @@ const CreditCards = {
         `);
     },
 
-    saveCharge(cardId) {
+    saveCharge(cardId, editChargeId) {
         const description = document.getElementById('ch-desc').value.trim();
         const totalAmount = parseFloat(document.getElementById('ch-total').value);
         const installments = parseInt(document.getElementById('ch-inst').value) || 1;
@@ -147,9 +148,32 @@ const CreditCards = {
         const monthlyAmount = Math.round((totalAmount / installments) * 100) / 100;
         Store.update(data => {
             const card = data.creditCards.find(c => c.id === cardId);
-            if (card) card.charges.push({ id: Store.genId(), description, totalAmount, installments, installmentsPaid: 0, startDate, monthlyAmount });
+            if (!card) return;
+            if (editChargeId) {
+                const ch = card.charges.find(c => c.id === editChargeId);
+                if (ch) Object.assign(ch, { description, totalAmount, installments, startDate, monthlyAmount });
+            } else {
+                card.charges.push({ id: Store.genId(), description, totalAmount, installments, installmentsPaid: 0, startDate, monthlyAmount });
+            }
         });
-        closeModal(); showToast('חיוב נוסף', 'success');
+        closeModal(); showToast(editChargeId ? 'חיוב עודכן' : 'חיוב נוסף', 'success');
+    },
+
+    editCharge(cardId, chargeId) {
+        const data = Store.get();
+        const card = data.creditCards.find(c => c.id === cardId);
+        if (!card) return;
+        const ch = card.charges.find(c => c.id === chargeId);
+        if (!ch) return;
+        openModal('עריכת חיוב', `
+            <div class="form-group"><label>תיאור</label><input type="text" id="ch-desc" value="${ch.description}"></div>
+            <div class="form-row">
+                <div class="form-group"><label>סכום כולל</label><input type="number" id="ch-total" value="${ch.totalAmount}"></div>
+                <div class="form-group"><label>מספר תשלומים</label><input type="number" id="ch-inst" value="${ch.installments}" min="1"></div>
+            </div>
+            <div class="form-group"><label>תאריך התחלה</label><input type="date" id="ch-start" value="${ch.startDate || ''}"></div>
+            <div class="modal-actions"><button class="btn btn-primary" onclick="CreditCards.saveCharge('${cardId}', '${chargeId}')">עדכן</button><button class="btn btn-ghost" onclick="closeModal()">ביטול</button></div>
+        `);
     },
 
     payInstallment(cardId, chargeId) {
